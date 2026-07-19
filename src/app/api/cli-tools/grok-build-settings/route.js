@@ -193,7 +193,7 @@ export async function GET(request) {
           const parts = m.split(":");
           const name = parts[0];
           const target = parts[1] || name;
-          customSections += `\n$c += "\`r\`n\`r\`n[model.\`\\"${name}\`\\"]\`r\`nmodel = \`\\"${target}\`\\"\`r\`nbase_url = \`\\"${vpsBaseUrl}\`\\"\`r\`nname = \`\\"${name}\`\\"\`r\`ndescription = \`\\"9Router model alias\`\\"\`r\`napi_backend = \`\\"chat_completions\`\\"\`r\`napi_key = \`\\"${vpsApiKey}\`\\"\`r\`n"`;
+          customSections += `\n$c += "\`r\`n\`r\`n[model.\`"${name}\`"]\`r\`nmodel = \`"${target}\`"\`r\`nbase_url = \`"${vpsBaseUrl}\`"\`r\`nname = \`"${name}\`"\`r\`ndescription = \`"9Router model alias\`"\`r\`napi_backend = \`"chat_completions\`"\`r\`napi_key = \`"${vpsApiKey}\`"\`r\`n"`;
         }
       }
 
