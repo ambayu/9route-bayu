@@ -86,3 +86,9 @@ graphify-out/*
 .codegraph/
 .PR/
 .next-analyze/*
+
+# 9Router local data and databases
+.9router/
+*.sqlite*
+*.log
+

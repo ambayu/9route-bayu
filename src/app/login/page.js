@@ -23,6 +23,8 @@ export default function LoginPage() {
     return () => clearInterval(id);
   }, [retryAfter]);
 
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+
   useEffect(() => {
     async function checkAuth() {
       const controller = new AbortController();
@@ -38,7 +40,7 @@ export default function LoginPage() {
         if (res.ok) {
           const data = await res.json();
           if (data.requireLogin === false) {
-            window.location.assign("/dashboard");
+            window.location.assign(basePath + "/dashboard");
             return;
           }
           setHasPassword(!!data.hasPassword);
@@ -55,7 +57,7 @@ export default function LoginPage() {
       }
     }
     checkAuth();
-  }, []);
+  }, [basePath]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -76,7 +78,7 @@ export default function LoginPage() {
           setMustChange(true);
           return;
         }
-        window.location.assign("/dashboard");
+        window.location.assign(basePath + "/dashboard");
       } else {
         const data = await res.json();
         setError(data.error || "Invalid password");

@@ -32,6 +32,29 @@ export async function resolveModelAlias(alias) {
   return resolveModelAliasFromMap(alias, aliases);
 }
 
+async function resolveNodePrefix(providerAlias, model) {
+  if (providerAlias && !RESERVED_PROVIDER_PREFIXES.has(providerAlias)) {
+    const openaiNodes = await getProviderNodes({ type: "openai-compatible" });
+    const matchedOpenAI = openaiNodes.find((node) => node.prefix === providerAlias);
+    if (matchedOpenAI) {
+      return { provider: matchedOpenAI.id, model };
+    }
+
+    const anthropicNodes = await getProviderNodes({ type: "anthropic-compatible" });
+    const matchedAnthropic = anthropicNodes.find((node) => node.prefix === providerAlias);
+    if (matchedAnthropic) {
+      return { provider: matchedAnthropic.id, model };
+    }
+
+    const embeddingNodes = await getProviderNodes({ type: "custom-embedding" });
+    const matchedEmbedding = embeddingNodes.find((node) => node.prefix === providerAlias);
+    if (matchedEmbedding) {
+      return { provider: matchedEmbedding.id, model };
+    }
+  }
+  return { provider: providerAlias, model };
+}
+
 /**
  * Get full model info (parse or resolve)
  */
@@ -39,31 +62,7 @@ export async function getModelInfo(modelStr) {
   const parsed = parseModel(modelStr);
 
   if (!parsed.isAlias) {
-    // Provider-node prefixes are user-defined. They must not override built-in
-    // provider ids/aliases such as `cf`, `cloudflare-ai`, `openai`, or `hf`.
-    if (!RESERVED_PROVIDER_PREFIXES.has(parsed.providerAlias)) {
-      const openaiNodes = await getProviderNodes({ type: "openai-compatible" });
-      const matchedOpenAI = openaiNodes.find((node) => node.prefix === parsed.providerAlias);
-      if (matchedOpenAI) {
-        return { provider: matchedOpenAI.id, model: parsed.model };
-      }
-
-      const anthropicNodes = await getProviderNodes({ type: "anthropic-compatible" });
-      const matchedAnthropic = anthropicNodes.find((node) => node.prefix === parsed.providerAlias);
-      if (matchedAnthropic) {
-        return { provider: matchedAnthropic.id, model: parsed.model };
-      }
-
-      const embeddingNodes = await getProviderNodes({ type: "custom-embedding" });
-      const matchedEmbedding = embeddingNodes.find((node) => node.prefix === parsed.providerAlias);
-      if (matchedEmbedding) {
-        return { provider: matchedEmbedding.id, model: parsed.model };
-      }
-    }
-    return {
-      provider: parsed.provider,
-      model: parsed.model
-    };
+    return await resolveNodePrefix(parsed.providerAlias, parsed.model);
   }
 
   // Check if this is a combo name before resolving as alias
@@ -75,7 +74,8 @@ export async function getModelInfo(modelStr) {
     return { provider: null, model: parsed.model };
   }
 
-  return getModelInfoCore(modelStr, getModelAliases);
+  const resolved = await getModelInfoCore(modelStr, getModelAliases);
+  return await resolveNodePrefix(resolved.provider, resolved.model);
 }
 
 /**

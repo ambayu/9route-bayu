@@ -216,10 +216,11 @@ export default function Header({ onMenuClick, showMenuButton = true }) {
   }, []);
 
   const handleLogout = async () => {
+    const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
     try {
       const res = await fetch("/api/auth/logout", { method: "POST" });
       if (res.ok) {
-        window.location.assign("/login");
+        window.location.assign(basePath + "/login");
       }
     } catch (err) {
       console.error("Failed to logout:", err);

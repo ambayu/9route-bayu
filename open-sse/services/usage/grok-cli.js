@@ -168,21 +168,26 @@ export function parseGrokCliBilling(billing, user = null) {
       total: onDemandCap,
       resetAt: periodEnd,
     });
-  } else if (
-    !subscriptionAccess &&
-    Number.isFinite(onDemandCap) &&
-    onDemandCap === 0 &&
-    Number.isFinite(onDemandUsed)
-  ) {
-    // Cap 0 is the exhausted free/promo state (chat returns 402 spending-limit).
-    // UI treats total===0 as unlimited, so use a synthetic 1/1 depleted row.
-    quotas["On-demand"] = {
-      used: 1,
-      total: 1,
-      remainingPercentage: 0,
-      resetAt: periodEnd,
-      unlimited: false,
-    };
+  } else if (Number.isFinite(onDemandCap) && onDemandCap === 0 && Number.isFinite(onDemandUsed)) {
+    if (subscriptionAccess || user?.hasGrokCodeAccess === true || user?.subscriptionTier === "GrokPro") {
+      // Grok Pro / Grok Code personal subscriptions have unlimited usage (no credit caps)
+      quotas["On-demand"] = makeQuota({
+        used: onDemandUsed || 0,
+        total: 0,
+        resetAt: periodEnd,
+        unlimited: true,
+      });
+    } else {
+      // Cap 0 is the exhausted free/promo state (chat returns 402 spending-limit).
+      // UI treats total===0 as unlimited, so use a synthetic 1/1 depleted row.
+      quotas["On-demand"] = {
+        used: 1,
+        total: 1,
+        remainingPercentage: 0,
+        resetAt: periodEnd,
+        unlimited: false,
+      };
+    }
   }
 
   // Prepaid top-up balance (remaining credits; no fixed allotment known)

@@ -125,6 +125,18 @@ export const CLI_TOOLS = {
     color: "#10A37F",
     description: "OpenAI Codex CLI",
     configType: "custom",
+    modelAliases: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3", "gpt-5.3-codex", "gpt-5.2"],
+    defaultModels: [
+      { id: "gpt-5.6-sol", name: "GPT 5.6 Sol", alias: "gpt-5.6-sol", defaultValue: "cx/gpt-5.6-sol" },
+      { id: "gpt-5.6-terra", name: "GPT 5.6 Terra", alias: "gpt-5.6-terra", defaultValue: "cx/gpt-5.6-terra" },
+      { id: "gpt-5.6-luna", name: "GPT 5.6 Luna", alias: "gpt-5.6-luna", defaultValue: "cx/gpt-5.6-luna" },
+      { id: "gpt-5.5", name: "GPT 5.5", alias: "gpt-5.5", defaultValue: "cx/gpt-5.5" },
+      { id: "gpt-5.4", name: "GPT 5.4", alias: "gpt-5.4", defaultValue: "cx/gpt-5.4" },
+      { id: "gpt-5.4-mini", name: "GPT 5.4 Mini", alias: "gpt-5.4-mini", defaultValue: "cx/gpt-5.4-mini" },
+      { id: "gpt-5.3", name: "GPT 5.3", alias: "gpt-5.3", defaultValue: "cx/gpt-5.3" },
+      { id: "gpt-5.3-codex", name: "GPT 5.3 Codex", alias: "gpt-5.3-codex", defaultValue: "cx/gpt-5.3-codex" },
+      { id: "gpt-5.2", name: "GPT 5.2", alias: "gpt-5.2", defaultValue: "cx/gpt-5.2" },
+    ],
   },
   opencode: {
     id: "opencode",

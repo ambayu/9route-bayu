@@ -228,6 +228,12 @@ export class CodexExecutor extends BaseExecutor {
     return shouldRefreshCredentials("codex", credentials);
   }
 
+  async execute(args) {
+    this._isCompact = !!args.body?._compact;
+    if (args.body) delete args.body._compact;
+    return super.execute(args);
+  }
+
   /**
    * Prefetch remote image URLs and inline them as base64 data URIs.
    * Runs before execute() because Codex backend cannot fetch remote images.
@@ -386,8 +392,6 @@ export class CodexExecutor extends BaseExecutor {
    * Image fetching is handled separately in prefetchImages() so this stays sync.
    */
   transformRequest(model, body, stream, credentials) {
-    this._isCompact = !!body._compact;
-    delete body._compact;
     // Resolve conversation-stable session_id (priority: body → assistant-text → workspace → machine)
     this._currentSessionId = resolveCacheSessionId(body, credentials);
     // Convert string input to array format (Codex API requires input as array)

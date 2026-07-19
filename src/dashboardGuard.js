@@ -181,6 +181,7 @@ export const __test__ = {
 };
 
 export async function proxy(request) {
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || request.nextUrl.basePath || "";
   const { pathname } = request.nextUrl;
 
   // Local-only gate for spawn-capable / host-secret routes.
@@ -227,7 +228,7 @@ export async function proxy(request) {
           const tunnelHost = settings.tunnelUrl ? new URL(settings.tunnelUrl).hostname.toLowerCase() : "";
           const tailscaleHost = settings.tailscaleUrl ? new URL(settings.tailscaleUrl).hostname.toLowerCase() : "";
           if ((tunnelHost && host === tunnelHost) || (tailscaleHost && host === tailscaleHost)) {
-            return NextResponse.redirect(new URL("/login", request.url));
+            return NextResponse.redirect(new URL(basePath + "/login", request.url));
           }
         }
       }
@@ -244,16 +245,16 @@ export async function proxy(request) {
       if (await verifyDashboardAuthToken(token)) {
         return NextResponse.next();
       } else {
-        return NextResponse.redirect(new URL("/login", request.url));
+        return NextResponse.redirect(new URL(basePath + "/login", request.url));
       }
     }
 
-    return NextResponse.redirect(new URL("/login", request.url));
+    return NextResponse.redirect(new URL(basePath + "/login", request.url));
   }
 
   // Redirect / to /dashboard if logged in, or /dashboard if it's the root
   if (pathname === "/") {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    return NextResponse.redirect(new URL(basePath + "/dashboard", request.url));
   }
 
   return NextResponse.next();

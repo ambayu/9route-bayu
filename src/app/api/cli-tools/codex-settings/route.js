@@ -7,6 +7,18 @@ import fs from "fs/promises";
 import path from "path";
 import os from "os";
 import { parseTOML, stringifyTOML } from "confbox";
+import { getModelAliases } from "@/lib/localDb";
+
+const CODEX_ALIAS_KEYS = [
+  "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
+  "5.6-sol", "5.6-terra", "5.6-luna",
+  "gpt-5.6", "5.6",
+  "gpt-5.5", "5.5",
+  "gpt-5.4", "5.4",
+  "gpt-5.4-mini", "5.4-mini",
+  "gpt-5.3-codex", "gpt-5.3", "5.3",
+  "gpt-5.2", "5.2"
+];
 
 const execAsync = promisify(exec);
 
@@ -83,21 +95,18 @@ const has9RouterConfig = (config) => {
 export async function GET() {
   try {
     const isInstalled = await checkCodexInstalled();
-    
-    if (!isInstalled) {
-      return NextResponse.json({
-        installed: false,
-        config: null,
-        message: "Codex CLI is not installed",
-      });
-    }
-
     const config = await readConfig();
+
+    const aliases = await getModelAliases();
+    const hasAliases = Object.keys(aliases || {}).some(k => 
+      CODEX_ALIAS_KEYS.includes(k.toLowerCase()) && aliases[k]
+    );
 
     return NextResponse.json({
       installed: true,
       config,
-      has9Router: has9RouterConfig(config),
+      isVirtual: !isInstalled,
+      has9Router: has9RouterConfig(config) || hasAliases,
       configPath: getCodexConfigPath(),
     });
   } catch (error) {

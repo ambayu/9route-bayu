@@ -256,6 +256,9 @@ function normalizeGrokCliTools(body) {
       // Hosted tools: { type: "web_search" } / { type: "x_search" }
       if (HOSTED_TOOL_TYPES.has(type)) {
         hostedTypes.add(type);
+        for (const k of Object.keys(tool)) {
+          if (k !== "type") delete tool[k];
+        }
         return true;
       }
       // Nested function shape without type
@@ -271,7 +274,13 @@ function normalizeGrokCliTools(body) {
     const isFunction =
       type === "function" || type === "" || tool.function || typeof tool.name === "string";
     if (!isFunction || HOSTED_TOOL_TYPES.has(type)) {
-      return HOSTED_TOOL_TYPES.has(type);
+      if (HOSTED_TOOL_TYPES.has(type)) {
+        for (const k of Object.keys(tool)) {
+          if (k !== "type") delete tool[k];
+        }
+        return true;
+      }
+      return false;
     }
 
     const fn =
@@ -317,9 +326,16 @@ function normalizeGrokCliTools(body) {
     if (choiceType === "function" || choiceType === "custom") {
       const rawName = body.tool_choice.name ?? body.tool_choice.function?.name;
       const name = typeof rawName === "string" ? rawName.trim().slice(0, 128) : "";
-      if (!name || !validNames.has(name)) delete body.tool_choice;
-      else body.tool_choice = { type: "function", name };
-    } else if (!hostedTypes.has(choiceType)) {
+      if (!name || !validNames.has(name)) {
+        delete body.tool_choice;
+      } else {
+        body.tool_choice = { type: "function", name };
+      }
+    } else if (hostedTypes.has(choiceType)) {
+      for (const k of Object.keys(body.tool_choice)) {
+        if (k !== "type") delete body.tool_choice[k];
+      }
+    } else {
       delete body.tool_choice;
     }
   }
@@ -344,10 +360,12 @@ export class GrokCliExecutor extends BaseExecutor {
     this._currentReqId = null;
     this._currentTurnIdx = 1;
     this._agentId = null;
+    this._isCompact = false;
   }
 
   buildUrl() {
-    return this.config.baseUrl;
+    const base = this.config.baseUrl;
+    return this._isCompact ? `${base}/compact` : base;
   }
 
   async refreshCredentials(credentials, log, proxyOptions = null) {
@@ -417,6 +435,8 @@ export class GrokCliExecutor extends BaseExecutor {
   }
 
   transformRequest(model, body, stream, credentials) {
+    this._isCompact = !!body._compact;
+    delete body._compact;
     // Session / request ids for headers — stable per client conversation when possible
     const requestKey = body;
     this._currentSessionId = resolveGrokCliSessionId(credentials, body);

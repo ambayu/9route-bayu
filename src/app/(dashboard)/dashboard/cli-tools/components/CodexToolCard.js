@@ -22,6 +22,7 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
   const [modelAliases, setModelAliases] = useState({});
   const [showManualConfigModal, setShowManualConfigModal] = useState(false);
   const [customBaseUrl, setCustomBaseUrl] = useState("");
+  const [currentEditingAlias, setCurrentEditingAlias] = useState(null);
 
   useEffect(() => {
     if (apiKeys?.length > 0 && !selectedApiKey) {
@@ -147,11 +148,70 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
     }
   };
 
-  const handleModelSelect = (model) => {
-    setSelectedModel(model.value);
-    // Auto-set subagent model if not set
-    if (!subagentModel) {
-      setSubagentModel(model.value);
+  const handleModelAliasTextChange = (alias, value) => {
+    setModelAliases(prev => ({ ...prev, [alias]: value }));
+  };
+
+  const handleModelAliasBlur = async (alias, value) => {
+    if (!value.trim()) {
+      handleModelAliasDelete(alias);
+      return;
+    }
+    try {
+      await fetch("/api/models/alias", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ alias, model: value.trim() }),
+      });
+    } catch (error) {
+      console.log("Failed to save alias mapping:", error);
+    }
+  };
+
+  const handleModelAliasDelete = async (alias) => {
+    try {
+      const res = await fetch(`/api/models/alias?alias=${encodeURIComponent(alias)}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        setModelAliases(prev => {
+          const updated = { ...prev };
+          delete updated[alias];
+          return updated;
+        });
+      }
+    } catch (error) {
+      console.log("Failed to delete alias mapping:", error);
+    }
+  };
+
+  const openModelSelector = (alias) => {
+    setCurrentEditingAlias(alias);
+    setModalOpen(true);
+  };
+
+  const handleModelSelect = async (model) => {
+    if (currentEditingAlias) {
+      const alias = currentEditingAlias;
+      const targetModel = model.value;
+      try {
+        const res = await fetch("/api/models/alias", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ alias, model: targetModel }),
+        });
+        if (res.ok) {
+          setModelAliases(prev => ({ ...prev, [alias]: targetModel }));
+        }
+      } catch (error) {
+        console.log("Failed to save alias mapping:", error);
+      }
+      setCurrentEditingAlias(null);
+    } else {
+      setSelectedModel(model.value);
+      if (!subagentModel) {
+        setSubagentModel(model.value);
+      }
     }
     setModalOpen(false);
   };
@@ -345,6 +405,47 @@ model = "${effectiveSubagentModel}"
                     Select Model
                   </button>
                 </div>
+
+                {/* Model Mappings (Aliases) */}
+                {tool.defaultModels?.length > 0 && (
+                  <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-border">
+                    <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr] sm:items-center sm:gap-2">
+                      <h4 className="text-xs font-bold text-text-main sm:text-right">Model Routing (Aliases)</h4>
+                    </div>
+                    {tool.defaultModels.map((model) => (
+                      <div key={model.alias} className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr_auto] sm:items-center sm:gap-2">
+                        <span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">{model.name}</span>
+                        <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">arrow_forward</span>
+                        <div className="relative w-full min-w-0">
+                          <input
+                            type="text"
+                            value={modelAliases[model.alias] || ""}
+                            onChange={(e) => handleModelAliasTextChange(model.alias, e.target.value)}
+                            onBlur={(e) => handleModelAliasBlur(model.alias, e.target.value)}
+                            placeholder="provider/model-id"
+                            className="w-full min-w-0 pl-2 pr-7 py-2 bg-surface rounded border border-border text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 sm:py-1.5"
+                          />
+                          {modelAliases[model.alias] && (
+                            <button
+                              onClick={() => handleModelAliasDelete(model.alias)}
+                              className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-red-500 rounded transition-colors"
+                              title="Clear"
+                            >
+                              <span className="material-symbols-outlined text-[14px]">close</span>
+                            </button>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => openModelSelector(model.alias)}
+                          disabled={!activeProviders?.length}
+                          className={`w-full sm:w-auto rounded border px-2 py-2 text-xs transition-colors sm:py-1.5 whitespace-nowrap sm:shrink-0 ${activeProviders?.length ? "bg-surface border-border text-text-main hover:border-primary cursor-pointer" : "opacity-50 cursor-not-allowed border-border"}`}
+                        >
+                          Select Model
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {message && (
@@ -373,12 +474,12 @@ model = "${effectiveSubagentModel}"
       {modalOpen && (
         <ModelSelectModal
           isOpen={modalOpen}
-          onClose={() => setModalOpen(false)}
+          onClose={() => { setModalOpen(false); setCurrentEditingAlias(null); }}
           onSelect={handleModelSelect}
-          selectedModel={selectedModel}
+          selectedModel={currentEditingAlias ? (modelAliases[currentEditingAlias] || "") : selectedModel}
           activeProviders={activeProviders}
           modelAliases={modelAliases}
-          title="Select Model for Codex"
+          title={currentEditingAlias ? `Select Model for ${currentEditingAlias}` : "Select Model for Codex"}
         />
       )}
 
