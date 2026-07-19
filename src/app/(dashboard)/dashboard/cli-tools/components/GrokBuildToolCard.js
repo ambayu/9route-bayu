@@ -31,7 +31,8 @@ export default function GrokBuildToolCard({
   const [restoring, setRestoring] = useState(false);
   const [message, setMessage] = useState(null);
   const [selectedApiKey, setSelectedApiKey] = useState("");
-  const [selectedModel, setSelectedModel] = useState("");
+  const [selectedModel, setSelectedModel] = useState("gpt-5.5");
+  const [customModels, setCustomModels] = useState("9route-gemini3.5, 9route-codex-5.5");
   const [modalOpen, setModalOpen] = useState(false);
   const [modelAliases, setModelAliases] = useState({});
   const [showManualConfigModal, setShowManualConfigModal] = useState(false);
@@ -228,44 +229,22 @@ api_key = "${keyToUse}"
             </div>
           )}
 
-          {!checking && grokStatus && !grokStatus.installed && (
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-3 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
-                <div className="flex items-start gap-3">
-                  <span className="material-symbols-outlined text-yellow-500">warning</span>
-                  <div className="flex-1">
-                    <p className="font-medium text-yellow-600 dark:text-yellow-400">Grok Build not detected locally</p>
-                    <p className="text-sm text-text-muted mt-1">Install:</p>
-                    <code className="block mt-2 p-2 bg-black/20 rounded text-xs font-mono">curl -fsSL https://x.ai/cli/install.sh | bash</code>
-                    <p className="text-sm text-text-muted mt-2">Manual configuration is still available if 9router is deployed on a remote server.</p>
+          {!checking && grokStatus && (
+            <>
+              {!grokStatus.installed && (
+                <div className="flex flex-col gap-3 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg mb-2">
+                  <div className="flex items-start gap-3">
+                    <span className="material-symbols-outlined text-yellow-500">warning</span>
+                    <div className="flex-1">
+                      <p className="font-medium text-yellow-600 dark:text-yellow-400">Grok Build not detected locally</p>
+                      <p className="text-sm text-text-muted mt-1">Install:</p>
+                      <code className="block mt-2 p-2 bg-black/20 rounded text-xs font-mono">curl -fsSL https://x.ai/cli/install.sh | bash</code>
+                      <p className="text-sm text-text-muted mt-2">Configure your custom options below, then click &quot;Download Switcher Script&quot; to apply them to your local PC.</p>
+                    </div>
                   </div>
                 </div>
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2 pl-0 sm:pl-9">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setShowManualConfigModal(true)}
-                    className="w-full sm:w-auto !bg-yellow-500/20 !border-yellow-500/40 !text-yellow-700 dark:!text-yellow-300 hover:!bg-yellow-500/30"
-                  >
-                    <span className="material-symbols-outlined text-[18px] mr-1">content_copy</span>
-                    Manual Config
-                  </Button>
-                  <a
-                    href="/api/cli-tools/grok-build-settings?action=download-switcher"
-                    download="switch-grok-endpoint.bat"
-                    className="flex items-center justify-center gap-1 w-full sm:w-auto rounded border border-yellow-500/40 bg-yellow-500/20 px-2 py-2 text-xs text-yellow-700 dark:text-yellow-300 hover:bg-yellow-500/30 transition-colors sm:py-1.5"
-                    title="Download Windows batch file to configure Grok Build for Local or VPS 9Router"
-                  >
-                    <span className="material-symbols-outlined text-[14px]">download</span>
-                    <span>Download Switcher Script (Windows)</span>
-                  </a>
-                </div>
-              </div>
-            </div>
-          )}
+              )}
 
-          {!checking && grokStatus?.installed && (
-            <>
               <div className="flex flex-col gap-2">
                 {tool.notes && tool.notes.length > 0 && (
                   <div className="flex flex-col gap-2 mb-2">
@@ -301,7 +280,7 @@ api_key = "${keyToUse}"
                   />
                 </div>
 
-                {grokStatus?.settings?.model?.base_url && (
+                {grokStatus.installed && grokStatus?.settings?.model?.base_url && (
                   <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr_auto] sm:items-center sm:gap-2">
                     <span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">Current</span>
                     <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">arrow_forward</span>
@@ -351,6 +330,26 @@ api_key = "${keyToUse}"
                     Select
                   </button>
                 </div>
+
+                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr] sm:items-start sm:gap-2">
+                  <div className="flex flex-col sm:text-right">
+                    <span className="text-xs font-semibold text-text-main sm:text-sm">Grok Model Slots</span>
+                    <span className="text-[10px] text-text-muted">Comma-separated</span>
+                  </div>
+                  <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline mt-1.5">arrow_forward</span>
+                  <div className="w-full">
+                    <input
+                      type="text"
+                      value={customModels}
+                      onChange={(e) => setCustomModels(e.target.value)}
+                      placeholder="e.g. 9route-gemini3.5, 9route-codex-5.5"
+                      className="w-full min-w-0 px-2 py-2 bg-surface rounded border border-border text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 sm:py-1.5"
+                    />
+                    <p className="text-[10px] text-text-muted mt-1">
+                      These model names will be registered in your Grok config. You can switch between them using the <code>/model</code> command in the Grok terminal.
+                    </p>
+                  </div>
+                </div>
               </div>
 
               {message && (
@@ -361,26 +360,33 @@ api_key = "${keyToUse}"
               )}
 
               <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                <Button variant="primary" size="sm" onClick={handleApply} disabled={!selectedModel} loading={applying} className="w-full sm:w-auto">
-                  <span className="material-symbols-outlined text-[14px] mr-1">save</span>Apply
-                </Button>
-                <Button variant="outline" size="sm" onClick={handleReset} disabled={!grokStatus?.has9Router} loading={restoring} className="w-full sm:w-auto">
-                  <span className="material-symbols-outlined text-[14px] mr-1">restore</span>Reset
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => setShowManualConfigModal(true)} className="w-full sm:w-auto">
+                {grokStatus.installed && (
+                  <>
+                    <Button variant="primary" size="sm" onClick={handleApply} disabled={!selectedModel} loading={applying} className="w-full sm:w-auto">
+                      <span className="material-symbols-outlined text-[14px] mr-1">save</span>Apply
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={handleReset} disabled={!grokStatus?.has9Router} loading={restoring} className="w-full sm:w-auto">
+                      <span className="material-symbols-outlined text-[14px] mr-1">restore</span>Reset
+                    </Button>
+                  </>
+                )}
+                <Button variant={grokStatus.installed ? "ghost" : "secondary"} size="sm" onClick={() => setShowManualConfigModal(true)} className="w-full sm:w-auto">
                   <span className="material-symbols-outlined text-[14px] mr-1">content_copy</span>Manual Config
                 </Button>
                 <a
-                  href="/api/cli-tools/grok-build-settings?action=download-switcher"
+                  href={`/api/cli-tools/grok-build-settings?action=download-switcher&baseUrl=${encodeURIComponent(customBaseUrl || getEffectiveBaseUrl())}&apiKey=${encodeURIComponent(selectedApiKey)}&model=${encodeURIComponent(selectedModel || "gpt-5.5")}&models=${encodeURIComponent(customModels)}`}
                   download="switch-grok-endpoint.bat"
-                  className="flex items-center justify-center gap-1 w-full sm:w-auto rounded border border-border px-2 py-2 text-xs text-text-main hover:border-primary hover:text-primary transition-colors sm:py-1.5"
-                  title="Download a Windows batch file to switch Grok Build between Local and VPS endpoints"
+                  className={`flex items-center justify-center gap-1 w-full sm:w-auto rounded border px-2 py-2 text-xs transition-colors sm:py-1.5 whitespace-nowrap ${
+                    grokStatus.installed
+                      ? "border-border text-text-main hover:border-primary hover:text-primary"
+                      : "border-yellow-500/40 bg-yellow-500/20 text-yellow-700 dark:text-yellow-300 hover:bg-yellow-500/30 font-semibold"
+                  }`}
+                  title="Download Windows batch file to configure Grok Build for Local or VPS 9Router"
                 >
                   <span className="material-symbols-outlined text-[14px]">download</span>
-                  <span>Download Switcher Script</span>
+                  <span>Download Switcher Script (Windows)</span>
                 </a>
               </div>
-
             </>
           )}
         </div>

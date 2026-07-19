@@ -159,20 +159,40 @@ export async function GET(request) {
     const action = url ? url.searchParams.get("action") : null;
 
     if (action === "download-switcher" && request) {
+      const searchParams = url.searchParams;
+      const paramBaseUrl = searchParams.get("baseUrl");
+      const paramApiKey = searchParams.get("apiKey");
+      const paramModel = searchParams.get("model");
+      const paramCustomModels = searchParams.get("models") || "";
+
       const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || "localhost:20127";
       let proto = request.headers.get("x-forwarded-proto") || "http";
       if (host.includes("umnaw.ac.id") || host.endsWith(":443")) proto = "https";
       const basePath = "/route9";
-      const vpsBaseUrl = `${proto}://${host}${basePath}/v1`;
+      
+      const vpsBaseUrl = paramBaseUrl || `${proto}://${host}${basePath}/v1`;
       const localBaseUrl = "http://localhost:20127/v1";
 
       // Fetch first active API key for VPS access
-      let vpsApiKey = "sk_9router";
-      try {
-        const apiKeys = await getApiKeys();
-        const activeKey = apiKeys.find(k => k.isActive);
-        if (activeKey?.key) vpsApiKey = activeKey.key;
-      } catch { /* fallback */ }
+      let vpsApiKey = paramApiKey;
+      if (!vpsApiKey) {
+        vpsApiKey = "sk_9router";
+        try {
+          const apiKeys = await getApiKeys();
+          const activeKey = apiKeys.find(k => k.isActive);
+          if (activeKey?.key) vpsApiKey = activeKey.key;
+        } catch { /* fallback */ }
+      }
+
+      const defaultModel = paramModel || "gpt-5.5";
+
+      let customSections = "";
+      if (paramCustomModels) {
+        const modelsList = paramCustomModels.split(",").map(m => m.trim()).filter(Boolean);
+        for (const m of modelsList) {
+          customSections += `\n$c += "\`r\`n\`r\`n[model.\`\\"${m}\`\\"]\`r\`nmodel = \`\\"${m}\`\\"\`r\`nbase_url = \`\\"${vpsBaseUrl}\`\\"\`r\`nname = \`\\"${m}\`\\"\`r\`ndescription = \`\\"9Router model alias\`\\"\`r\`napi_backend = \`\\"chat_completions\`\\"\`r\`napi_key = \`\\"${vpsApiKey}\`\\"\`r\`n"`;
+        }
+      }
 
       const psScript = `$configPath = Join-Path $env:USERPROFILE '.grok\\config.toml'
 
@@ -200,9 +220,8 @@ if ($choice -eq '1') {
     Write-Host "Reverting to xAI default..." -ForegroundColor Yellow
     if (Test-Path $configPath) {
         $c = Get-Content $configPath -Raw
-        $c = $c -replace '(?s)\\[model\\.9router[^\\]]*\\].*?(?=\\r?\\n\\[|\\Z)', ''
+        $c = $c -replace '(?s)\\[model\\.[^\\]]*\\].*?base_url\\s*=\\s*"[^"]*route9[^"]*".*?(?=\\r?\\n\\[|\\Z)', ''
         $c = $c -replace '(?s)\\[model\\.9router-local[^\\]]*\\].*?(?=\\r?\\n\\[|\\Z)', ''
-        $c = $c -replace '(?s)\\[model\\.9router-vps[^\\]]*\\].*?(?=\\r?\\n\\[|\\Z)', ''
         $c = $c -replace 'default\\s*=\\s*"9router[^"]*"', 'default = "grok-build"'
         $c = $c -replace '\\n{3,}', "\\n\\n"
         Set-Content $configPath $c.Trim()
@@ -222,15 +241,15 @@ $c = Get-Content $configPath -Raw
 if ($null -eq $c) { $c = '' }
 
 # Remove old 9router model sections
-$c = $c -replace '(?s)\\[model\\.9router\\].*?(?=\\r?\\n\\[|\\Z)', ''
+$c = $c -replace '(?s)\\[model\\.[^\\]]*\\].*?base_url\\s*=\\s*"[^"]*route9[^"]*".*?(?=\\r?\\n\\[|\\Z)', ''
 $c = $c -replace '(?s)\\[model\\.9router-local\\].*?(?=\\r?\\n\\[|\\Z)', ''
-$c = $c -replace '(?s)\\[model\\.9router-vps\\].*?(?=\\r?\\n\\[|\\Z)', ''
 $c = $c.Trim()
 
 # Add model slots for both local and VPS
-$localSection = \"\`r\`n\`r\`n[model.9router-local]\`r\`nmodel = \`\"grok-4\`\"\`r\`nbase_url = \`\"${localBaseUrl}\`\"\`r\`nname = \`\"9Router Local\`\"\`r\`ndescription = \`\"Local 9Router gateway\`\"\`r\`napi_backend = \`\"chat_completions\`\"\`r\`napi_key = \`\"sk_9router\`\"\`r\`n\"
-$vpsSection   = \"\`r\`n\`r\`n[model.9router-vps]\`r\`nmodel = \`\"grok-4\`\"\`r\`nbase_url = \`\"${vpsBaseUrl}\`\"\`r\`nname = \`\"9Router VPS\`\"\`r\`ndescription = \`\"Remote 9Router gateway\`\"\`r\`napi_backend = \`\"chat_completions\`\"\`r\`napi_key = \`\"${vpsApiKey}\`\"\`r\`n\"
+$localSection = \"\`r\`n\`r\`n[model.9router-local]\`r\`nmodel = \`\"${defaultModel}\`\"\`r\`nbase_url = \`\"${localBaseUrl}\`\"\`r\`nname = \`\"9Router Local\`\"\`r\`ndescription = \`\"Local 9Router gateway\`\"\`r\`napi_backend = \`\"chat_completions\`\"\`r\`napi_key = \`\"sk_9router\`\"\`r\`n\"
+$vpsSection   = \"\`r\`n\`r\`n[model.9router-vps]\`r\`nmodel = \`\"${defaultModel}\`\"\`r\`nbase_url = \`\"${vpsBaseUrl}\`\"\`r\`nname = \`\"9Router VPS\`\"\`r\`ndescription = \`\"Remote 9Router gateway\`\"\`r\`napi_backend = \`\"chat_completions\`\"\`r\`napi_key = \`\"${vpsApiKey}\`\"\`r\`n\"
 $c += $localSection + $vpsSection
+${customSections}
 
 # Update or add [models] default
 if ($c -match '(?m)^\\[models\\]') {

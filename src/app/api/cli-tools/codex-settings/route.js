@@ -177,36 +177,24 @@ else {
 }
 
 $c = Get-Content $configPath -Raw
+if ($null -eq $c) { $c = '' }
+
+# Ensure model_provider = "9router" is set
 if ($c -notlike '*model_provider = "9router"*') {
-    $c += "\`r\`nmodel_provider = \`"9router\`\"\`r\`n\`r\`n[model_providers.9router]\`r\`nname = \`"9Router\`\"\`r\`nbase_url = \`"\`\"\`r\`nwire_api = \`"responses\`\"\`r\`n"
+    $c = "model_provider = `"9router\`"\`r\`n" + $c
 }
 
-$c = $c -replace '(base_url\\s*=\\s*")[^"]*(")', "\`$1$newUrl\`$2"
-Set-Content $configPath $c
+# Remove any old 9router sections
+$c = $c -replace '(?s)\\[model_providers\\.9router\\].*?(?=\\r?\\n\\[|\\Z)', ''
+$c = $c.Trim()
 
-# Set API key in auth.json if switching to VPS
+# Append clean section with required auth and token
+$newSection = "\`r\`n\`r\`n[model_providers.9router]\`r\`nname = \`"9Router\`\"\`r\`nbase_url = \`"$newUrl\`\"\`r\`nwire_api = \`"responses\`\"\`r\`n"
 if ($apiKeyToSet) {
-    $authDir = Split-Path $authPath
-    if (-not (Test-Path $authDir)) { New-Item -ItemType Directory -Path $authDir -Force | Out-Null }
-    if (Test-Path $authPath) {
-        $j = Get-Content $authPath | ConvertFrom-Json
-    } else {
-        $j = [PSCustomObject]@{}
-    }
-    $j | Add-Member -MemberType NoteProperty -Name 'OPENAI_API_KEY' -Value $apiKeyToSet -Force
-    $j | Add-Member -MemberType NoteProperty -Name 'auth_mode' -Value 'api_key' -Force
-    $j | ConvertTo-Json | Set-Content $authPath
-    Write-Host "API key set in auth.json" -ForegroundColor Green
-} elseif (Test-Path $authPath) {
-    $j = Get-Content $authPath | ConvertFrom-Json
-    $j.psobject.properties.remove('OPENAI_API_KEY')
-    $j.psobject.properties.remove('auth_mode')
-    if (($j | Get-Member -MemberType NoteProperty).Count -eq 0) {
-        Remove-Item $authPath
-    } else {
-        $j | ConvertTo-Json | Set-Content $authPath
-    }
+    $newSection += "requires_openai_auth = true\`r\`nexperimental_bearer_token = \`"$apiKeyToSet\`\"\`r\`n"
 }
+$c += $newSection
+Set-Content $configPath $c
 # Force close running Codex processes to apply settings immediately
 Write-Host "Restarting Codex to apply changes..." -ForegroundColor Yellow
 Stop-Process -Name codex -Force -ErrorAction SilentlyContinue
