@@ -106,65 +106,82 @@ export async function GET(request) {
       const basePath = "/route9"; // Standard deployment path prefix
       const displayUrl = `${proto}://${host}${basePath}/v1`;
 
-      const lines = [
-        '@echo off',
-        'set "temp_ps1=%temp%\\temp_switch.ps1"',
-        '',
-        'echo $configPath = Join-Path $env:USERPROFILE \'.codex\\config.toml\' > "%temp_ps1%"',
-        'echo $authPath = Join-Path $env:USERPROFILE \'.codex\\auth.json\' >> "%temp_ps1%"',
-        'echo if (-not (Test-Path $configPath)) { >> "%temp_ps1%"',
-        'echo     Write-Host "Codex config file not found" -ForegroundColor Red >> "%temp_ps1%"',
-        'echo     Pause; Exit >> "%temp_ps1%"',
-        'echo } >> "%temp_ps1%"',
-        'echo Write-Host "==================================================" -ForegroundColor Cyan >> "%temp_ps1%"',
-        'echo Write-Host "       Codex Endpoint Switcher (9Router)" -ForegroundColor Cyan >> "%temp_ps1%"',
-        'echo Write-Host "==================================================" -ForegroundColor Cyan >> "%temp_ps1%"',
-        'echo Write-Host "" >> "%temp_ps1%"',
-        'echo Write-Host "Select target 9Router server:" >> "%temp_ps1%"',
-        'echo Write-Host " [1] Local 9Router (http://localhost:20127/v1)" >> "%temp_ps1%"',
-        `echo Write-Host " [2] Remote 9Router   (${displayUrl})" >> "%temp_ps1%"`,
-        'echo Write-Host " [3] Original Codex API (Default Official)" >> "%temp_ps1%"',
-        'echo Write-Host "" >> "%temp_ps1%"',
-        'echo Write-Host "==================================================" -ForegroundColor Cyan >> "%temp_ps1%"',
-        'echo $choice = Read-Host "Enter choice (1, 2, or 3)" >> "%temp_ps1%"',
-        'echo if ($choice -eq \'1\') { >> "%temp_ps1%"',
-        'echo     $newUrl = "http://localhost:20127/v1" >> "%temp_ps1%"',
-        'echo     $label = "Local 9Router" >> "%temp_ps1%"',
-        'echo } elseif ($choice -eq \'2\') { >> "%temp_ps1%"',
-        `echo     $newUrl = "${displayUrl}" >> "%temp_ps1%"`,
-        'echo     $label = "Remote 9Router" >> "%temp_ps1%"',
-        'echo } elseif ($choice -eq \'3\') { >> "%temp_ps1%"',
-        'echo     $c = Get-Content $configPath -Raw >> "%temp_ps1%"',
-        'echo     $c = $c -replace \'model_provider\\s*=\\s*\\"9router\\"\\s*\\r?\\n?\', \'\' >> "%temp_ps1%"',
-        'echo     $c = $c -replace \'(?s)\\[model_providers\\.9router\\].*?(?=\\r?\\n\\[|\\Z)\', \'\' >> "%temp_ps1%"',
-        'echo     $c = $c -replace \'(?s)\\[agents\\.subagent\\].*?(?=\\r?\\n\\[|\\Z)\', \'\' >> "%temp_ps1%"',
-        'echo     Set-Content $configPath $c.Trim() >> "%temp_ps1%"',
-        'echo     if (Test-Path $authPath) { >> "%temp_ps1%"',
-        'echo         $j = Get-Content $authPath | ConvertFrom-Json >> "%temp_ps1%"',
-        'echo         $j.psobject.properties.remove(\'OPENAI_API_KEY\') >> "%temp_ps1%"',
-        'echo         $j.psobject.properties.remove(\'auth_mode\') >> "%temp_ps1%"',
-        'echo         if (($j ^| Get-Member -MemberType NoteProperty).Count -eq 0) { Remove-Item $authPath } else { $j ^| ConvertTo-Json ^| Set-Content $authPath } >> "%temp_ps1%"',
-        'echo     } >> "%temp_ps1%"',
-        'echo     Write-Host "Restored to official settings" -ForegroundColor Green >> "%temp_ps1%"',
-        'echo     Pause; Exit >> "%temp_ps1%"',
-        'echo } else { >> "%temp_ps1%"',
-        'echo     Write-Host "Invalid choice" -ForegroundColor Red; Pause; Exit >> "%temp_ps1%"',
-        'echo } >> "%temp_ps1%"',
-        'echo $c = Get-Content $configPath -Raw >> "%temp_ps1%"',
-        'echo if ($c -notlike \'*model_provider = "9router"*\') { >> "%temp_ps1%"',
-        'echo     $c += "`r`nmodel_provider = `"9router`"`r`n`r`n[model_providers.9router]`r`nname = `"9Router`"`r`nbase_url = `"`"`r`nwire_api = `"responses`"`r`n" >> "%temp_ps1%"',
-        'echo } >> "%temp_ps1%"',
-        'echo $c = $c -replace \'(base_url\\s*=\\s*")[^"]*("\', "`$1$newUrl`$2" >> "%temp_ps1%"',
-        'echo Set-Content $configPath $c >> "%temp_ps1%"',
-        'echo Write-Host "" >> "%temp_ps1%"',
-        'echo Write-Host "[SUCCESS] Codex config updated to point to: $label ($newUrl)" -ForegroundColor Green >> "%temp_ps1%"',
-        'echo Write-Host "" >> "%temp_ps1%"',
-        'echo Pause >> "%temp_ps1%"',
-        '',
-        'powershell -NoProfile -ExecutionPolicy Bypass -File "%temp_ps1%"',
-        'del "%temp_ps1%"'
-      ];
-      const scriptContent = lines.join('\r\n');
+      const psScript = `$configPath = Join-Path $env:USERPROFILE '.codex\\config.toml'
+$authPath = Join-Path $env:USERPROFILE '.codex\\auth.json'
+
+if (-not (Test-Path $configPath)) {
+    Write-Host "Codex config file not found at $configPath" -ForegroundColor Red
+    Write-Host "Please configure Codex through the dashboard first." -ForegroundColor Yellow
+    Pause
+    Exit
+}
+
+Write-Host "==================================================" -ForegroundColor Cyan
+Write-Host "       Codex Endpoint Switcher (9Router)" -ForegroundColor Cyan
+Write-Host "==================================================" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "Select target 9Router server:"
+Write-Host " [1] Local 9Router (http://localhost:20127/v1)"
+Write-Host " [2] Remote 9Router   (${displayUrl})"
+Write-Host " [3] Original Codex API (Default Official)"
+Write-Host ""
+Write-Host "==================================================" -ForegroundColor Cyan
+
+$choice = Read-Host "Enter choice (1, 2, or 3)"
+
+if ($choice -eq '1') {
+    $newUrl = "http://localhost:20127/v1"
+    $label = "Local 9Router"
+}
+elseif ($choice -eq '2') {
+    $newUrl = "${displayUrl}"
+    $label = "Remote 9Router"
+}
+elseif ($choice -eq '3') {
+    Write-Host "Reverting to Official Codex Settings..." -ForegroundColor Yellow
+    $c = Get-Content $configPath -Raw
+    $c = $c -replace 'model_provider\\s*=\\s*"9router"\\s*\\r?\\n?', ''
+    $c = $c -replace '(?s)\\[model_providers\\.9router\\].*?(?=\\r?\\n\\[|\\Z)', ''
+    $c = $c -replace '(?s)\\[agents\\.subagent\\].*?(?=\\r?\\n\\[|\\Z)', ''
+    Set-Content $configPath $c.Trim()
+    Write-Host "config.toml restored" -ForegroundColor Green
+    
+    if (Test-Path $authPath) {
+        $j = Get-Content $authPath | ConvertFrom-Json
+        $j.psobject.properties.remove('OPENAI_API_KEY')
+        $j.psobject.properties.remove('auth_mode')
+        if (($j | Get-Member -MemberType NoteProperty).Count -eq 0) {
+            Remove-Item $authPath
+        } else {
+            $j | ConvertTo-Json | Set-Content $authPath
+        }
+        Write-Host "auth.json restored" -ForegroundColor Green
+    }
+    Pause
+    Exit
+}
+else {
+    Write-Host "Invalid choice. Exiting." -ForegroundColor Red
+    Pause
+    Exit
+}
+
+$c = Get-Content $configPath -Raw
+if ($c -notlike '*model_provider = "9router"*') {
+    $c += "\`r\`nmodel_provider = \`"9router\`\"\`r\`n\`r\`n[model_providers.9router]\`r\`nname = \`"9Router\`\"\`r\`nbase_url = \`"\`\"\`r\`nwire_api = \`"responses\`\"\`r\`n"
+}
+
+$c = $c -replace '(base_url\\s*=\\s*")[^"]*(")', "\`$1$newUrl\`$2"
+Set-Content $configPath $c
+
+Write-Host ""
+Write-Host "[SUCCESS] Codex config updated to point to: $label ($newUrl)" -ForegroundColor Green
+Write-Host ""
+Pause`;
+
+      const buffer = Buffer.from(psScript, 'utf16le');
+      const base64 = buffer.toString('base64');
+      const scriptContent = `@echo off\r\npowershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${base64}\r\n`;
       return new NextResponse(scriptContent, {
         headers: {
           "Content-Type": "application/x-bat",
