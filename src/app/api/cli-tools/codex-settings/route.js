@@ -104,7 +104,7 @@ export async function GET(request) {
       if (host.includes("umnaw.ac.id") || host.endsWith(":443")) {
         proto = "https";
       }
-      const basePath = "/route9"; // Standard deployment path prefix
+      const basePath = process.env.NEXT_PUBLIC_BASE_PATH || ""; // Standard deployment path prefix
       const displayUrl = `${proto}://${host}${basePath}/v1`;
 
       // Fetch first active API key from DB to embed in the switcher script

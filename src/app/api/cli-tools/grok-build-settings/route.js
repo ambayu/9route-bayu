@@ -168,7 +168,7 @@ export async function GET(request) {
       const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || "localhost:20127";
       let proto = request.headers.get("x-forwarded-proto") || "http";
       if (host.includes("umnaw.ac.id") || host.endsWith(":443")) proto = "https";
-      const basePath = "/route9";
+      const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
       
       const vpsBaseUrl = paramBaseUrl || `${proto}://${host}${basePath}/v1`;
       const localBaseUrl = "http://localhost:20127/v1";
