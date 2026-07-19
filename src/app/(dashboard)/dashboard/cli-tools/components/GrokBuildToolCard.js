@@ -104,17 +104,8 @@ export default function GrokBuildToolCard({
     }
   };
 
-  const normalizeLocalhost = (url) => url.replace("://localhost", "://127.0.0.1");
-
-  const getLocalBaseUrl = () => {
-    if (typeof window !== "undefined") {
-      return normalizeLocalhost(window.location.origin);
-    }
-    return "http://127.0.0.1:20128";
-  };
-
   const getEffectiveBaseUrl = () => {
-    const url = customBaseUrl || getLocalBaseUrl();
+    const url = customBaseUrl || `${baseUrl}`;
     return url.endsWith("/v1") ? url : `${url}/v1`;
   };
 
