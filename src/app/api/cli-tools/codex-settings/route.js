@@ -94,10 +94,10 @@ const has9RouterConfig = (config) => {
 // GET - Check codex CLI and read current settings
 export async function GET(request) {
   try {
-    const url = new URL(request.url);
-    const action = url.searchParams.get("action");
+    const url = request ? new URL(request.url) : null;
+    const action = url ? url.searchParams.get("action") : null;
 
-    if (action === "download-switcher") {
+    if (action === "download-switcher" && request) {
       const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || "localhost:20127";
       let proto = request.headers.get("x-forwarded-proto") || "http";
       // Auto-detect secure connection if host has standard SSL indicators or port is 443
