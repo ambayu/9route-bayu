@@ -6,7 +6,7 @@ import { promisify } from "util";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
-import { getApiKeys } from "@/lib/localDb";
+import { getApiKeys, getSettings, updateSettings } from "@/lib/localDb";
 
 const execAsync = promisify(exec);
 
@@ -190,7 +190,10 @@ export async function GET(request) {
       if (paramCustomModels) {
         const modelsList = paramCustomModels.split(",").map(m => m.trim()).filter(Boolean);
         for (const m of modelsList) {
-          customSections += `\n$c += "\`r\`n\`r\`n[model.\`\\"${m}\`\\"]\`r\`nmodel = \`\\"${m}\`\\"\`r\`nbase_url = \`\\"${vpsBaseUrl}\`\\"\`r\`nname = \`\\"${m}\`\\"\`r\`ndescription = \`\\"9Router model alias\`\\"\`r\`napi_backend = \`\\"chat_completions\`\\"\`r\`napi_key = \`\\"${vpsApiKey}\`\\"\`r\`n"`;
+          const parts = m.split(":");
+          const name = parts[0];
+          const target = parts[1] || name;
+          customSections += `\n$c += "\`r\`n\`r\`n[model.\`\\"${name}\`\\"]\`r\`nmodel = \`\\"${target}\`\\"\`r\`nbase_url = \`\\"${vpsBaseUrl}\`\\"\`r\`nname = \`\\"${name}\`\\"\`r\`ndescription = \`\\"9Router model alias\`\\"\`r\`napi_backend = \`\\"chat_completions\`\\"\`r\`napi_key = \`\\"${vpsApiKey}\`\\"\`r\`n"`;
         }
       }
 
@@ -286,12 +289,16 @@ Pause`;
       });
     }
 
+    const dbSettings = await getSettings();
+    const savedSlots = dbSettings?.grokBuildSettings?.modelSlots || [];
+
     const installed = await checkGrokInstalled();
     if (!installed) {
       return NextResponse.json({
         installed: false,
         settings: null,
         message: "Grok Build is not installed",
+        savedSlots,
       });
     }
 
@@ -307,6 +314,7 @@ Pause`;
       },
       has9Router: has9RouterConfig(model),
       configPath: getGrokConfigPath(),
+      savedSlots,
     });
   } catch (error) {
     console.log("Error checking grok-build settings:", error);
@@ -316,27 +324,35 @@ Pause`;
 
 export async function POST(request) {
   try {
-    const { baseUrl, apiKey, model } = await request.json();
-    if (!baseUrl || !model) {
-      return NextResponse.json({ error: "baseUrl and model are required" }, { status: 400 });
+    const { baseUrl, apiKey, model, modelSlots } = await request.json();
+
+    // Persist slots to DB settings
+    if (modelSlots !== undefined) {
+      await updateSettings({
+        grokBuildSettings: {
+          modelSlots: modelSlots || []
+        }
+      });
     }
 
-    const dir = getGrokDir();
-    await fs.mkdir(dir, { recursive: true });
+    if (baseUrl && model) {
+      const dir = getGrokDir();
+      await fs.mkdir(dir, { recursive: true });
 
-    const normalizedBaseUrl = baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`;
-    const keyToWrite = apiKey || "sk_9router";
+      const normalizedBaseUrl = baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`;
+      const keyToWrite = apiKey || "sk_9router";
 
-    let toml = await readConfigToml();
-    toml = rememberPrevDefault(toml);
-    toml = upsertModelSection(toml, buildModelSection(model, normalizedBaseUrl, keyToWrite));
-    toml = setModelsDefault(toml, MODEL_SLOT);
+      let toml = await readConfigToml();
+      toml = rememberPrevDefault(toml);
+      toml = upsertModelSection(toml, buildModelSection(model, normalizedBaseUrl, keyToWrite));
+      toml = setModelsDefault(toml, MODEL_SLOT);
 
-    await fs.writeFile(getGrokConfigPath(), toml);
+      await fs.writeFile(getGrokConfigPath(), toml);
+    }
 
     return NextResponse.json({
       success: true,
-      message: "Grok Build settings applied successfully!",
+      message: "Grok Build settings applied and saved successfully!",
       configPath: getGrokConfigPath(),
       modelSlot: MODEL_SLOT,
     });

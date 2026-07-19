@@ -32,7 +32,11 @@ export default function GrokBuildToolCard({
   const [message, setMessage] = useState(null);
   const [selectedApiKey, setSelectedApiKey] = useState("");
   const [selectedModel, setSelectedModel] = useState("gpt-5.5");
-  const [customModels, setCustomModels] = useState("9route-gemini3.5, 9route-codex-5.5");
+  const [modelSlots, setModelSlots] = useState([
+    { name: "9route-gemini3.5", target: "antigravity/gemini-3-flash-agent" },
+    { name: "9route-codex-5.5", target: "codex/gpt-5.5" }
+  ]);
+  const [editingRowIndex, setEditingRowIndex] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [modelAliases, setModelAliases] = useState({});
   const [showManualConfigModal, setShowManualConfigModal] = useState(false);
@@ -82,6 +86,9 @@ export default function GrokBuildToolCard({
       const cfg = grokStatus.settings?.model;
       if (cfg?.model) setSelectedModel(cfg.model);
     }
+    if (grokStatus?.savedSlots && grokStatus.savedSlots.length > 0) {
+      setModelSlots(grokStatus.savedSlots);
+    }
   }, [grokStatus]);
 
   const checkStatus = async () => {
@@ -126,11 +133,12 @@ export default function GrokBuildToolCard({
           baseUrl: getEffectiveBaseUrl(),
           apiKey: keyToUse,
           model: selectedModel,
+          modelSlots,
         }),
       });
       const data = await res.json();
       if (res.ok) {
-        setMessage({ type: "success", text: "Settings applied successfully!" });
+        setMessage({ type: "success", text: "Settings saved successfully!" });
         checkStatus();
       } else {
         setMessage({ type: "error", text: data.error || "Failed to apply settings" });
@@ -163,8 +171,16 @@ export default function GrokBuildToolCard({
   };
 
   const handleModelSelect = (model) => {
-    setSelectedModel(model.value);
+    const val = typeof model === "object" && model !== null ? (model.value || model.id || model.name) : model;
+    if (editingRowIndex === "default" || editingRowIndex === null) {
+      setSelectedModel(val);
+    } else if (typeof editingRowIndex === "number") {
+      const updated = [...modelSlots];
+      updated[editingRowIndex].target = val;
+      setModelSlots(updated);
+    }
     setModalOpen(false);
+    setEditingRowIndex(null);
   };
 
   const getManualConfigs = () => {
@@ -319,7 +335,10 @@ api_key = "${keyToUse}"
                     )}
                   </div>
                   <button
-                    onClick={() => setModalOpen(true)}
+                    onClick={() => {
+                      setEditingRowIndex("default");
+                      setModalOpen(true);
+                    }}
                     disabled={!hasActiveProviders}
                     className={`w-full sm:w-auto rounded border px-2 py-2 text-xs transition-colors sm:py-1.5 whitespace-nowrap sm:shrink-0 ${
                       hasActiveProviders
@@ -332,19 +351,65 @@ api_key = "${keyToUse}"
                 </div>
 
                 <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr] sm:items-start sm:gap-2">
-                  <div className="flex flex-col sm:text-right">
+                  <div className="flex flex-col sm:text-right mt-1">
                     <span className="text-xs font-semibold text-text-main sm:text-sm">Grok Model Slots</span>
-                    <span className="text-[10px] text-text-muted">Comma-separated</span>
+                    <span className="text-[10px] text-text-muted">Register custom slots</span>
                   </div>
-                  <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline mt-1.5">arrow_forward</span>
-                  <div className="w-full">
-                    <input
-                      type="text"
-                      value={customModels}
-                      onChange={(e) => setCustomModels(e.target.value)}
-                      placeholder="e.g. 9route-gemini3.5, 9route-codex-5.5"
-                      className="w-full min-w-0 px-2 py-2 bg-surface rounded border border-border text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 sm:py-1.5"
-                    />
+                  <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline mt-2.5">arrow_forward</span>
+                  <div className="flex flex-col gap-2 w-full">
+                    {modelSlots.map((slot, index) => (
+                      <div key={index} className="flex flex-col sm:flex-row items-center gap-2 bg-black/5 dark:bg-white/5 p-2.5 rounded-lg border border-border">
+                        <div className="flex flex-col gap-1 w-full sm:w-1/2">
+                          <span className="text-[10px] font-medium text-text-muted">Slot Name (Grok TUI)</span>
+                          <input
+                            type="text"
+                            value={slot.name}
+                            onChange={(e) => {
+                              const updated = [...modelSlots];
+                              updated[index].name = e.target.value;
+                              setModelSlots(updated);
+                            }}
+                            placeholder="e.g. 9route-gemini3.5"
+                            className="w-full px-2 py-1.5 bg-surface rounded border border-border text-xs focus:outline-none focus:ring-1 focus:ring-primary/50"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1 w-full sm:w-1/2">
+                          <span className="text-[10px] font-medium text-text-muted">Target Model</span>
+                          <div className="flex items-center gap-1.5 w-full">
+                            <span className="min-w-0 truncate text-xs text-text-muted px-2 py-1.5 bg-surface rounded border border-border flex-1 border-dashed">
+                              {slot.target || "Select target model..."}
+                            </span>
+                            <button
+                              onClick={() => {
+                                setEditingRowIndex(index);
+                                setModalOpen(true);
+                              }}
+                              className="px-2.5 py-1.5 bg-surface border border-border text-text-main hover:border-primary text-xs rounded transition-colors"
+                            >
+                              Select
+                            </button>
+                            <button
+                              onClick={() => {
+                                setModelSlots(modelSlots.filter((_, idx) => idx !== index));
+                              }}
+                              className="p-1.5 hover:text-red-500 rounded transition-colors text-text-muted shrink-0"
+                              title="Delete Slot"
+                            >
+                              <span className="material-symbols-outlined text-[18px]">delete</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setModelSlots([...modelSlots, { name: "", target: "" }])}
+                      className="w-fit self-start mt-1"
+                    >
+                      <span className="material-symbols-outlined text-[16px] mr-1">add</span>Add Model Slot
+                    </Button>
                     <p className="text-[10px] text-text-muted mt-1">
                       These model names will be registered in your Grok config. You can switch between them using the <code>/model</code> command in the Grok terminal.
                     </p>
@@ -360,21 +425,19 @@ api_key = "${keyToUse}"
               )}
 
               <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <Button variant="primary" size="sm" onClick={handleApply} disabled={!selectedModel} loading={applying} className="w-full sm:w-auto">
+                  <span className="material-symbols-outlined text-[14px] mr-1">save</span>Save Settings
+                </Button>
                 {grokStatus.installed && (
-                  <>
-                    <Button variant="primary" size="sm" onClick={handleApply} disabled={!selectedModel} loading={applying} className="w-full sm:w-auto">
-                      <span className="material-symbols-outlined text-[14px] mr-1">save</span>Apply
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={handleReset} disabled={!grokStatus?.has9Router} loading={restoring} className="w-full sm:w-auto">
-                      <span className="material-symbols-outlined text-[14px] mr-1">restore</span>Reset
-                    </Button>
-                  </>
+                  <Button variant="outline" size="sm" onClick={handleReset} disabled={!grokStatus?.has9Router} loading={restoring} className="w-full sm:w-auto">
+                    <span className="material-symbols-outlined text-[14px] mr-1">restore</span>Reset
+                  </Button>
                 )}
                 <Button variant={grokStatus.installed ? "ghost" : "secondary"} size="sm" onClick={() => setShowManualConfigModal(true)} className="w-full sm:w-auto">
                   <span className="material-symbols-outlined text-[14px] mr-1">content_copy</span>Manual Config
                 </Button>
                 <a
-                  href={`/api/cli-tools/grok-build-settings?action=download-switcher&baseUrl=${encodeURIComponent(customBaseUrl || getEffectiveBaseUrl())}&apiKey=${encodeURIComponent(selectedApiKey)}&model=${encodeURIComponent(selectedModel || "gpt-5.5")}&models=${encodeURIComponent(customModels)}`}
+                  href={`/api/cli-tools/grok-build-settings?action=download-switcher&baseUrl=${encodeURIComponent(customBaseUrl || getEffectiveBaseUrl())}&apiKey=${encodeURIComponent(selectedApiKey)}&model=${encodeURIComponent(selectedModel || "gpt-5.5")}&models=${encodeURIComponent(modelSlots.map(s => `${s.name}:${s.target}`).join(","))}`}
                   download="switch-grok-endpoint.bat"
                   className={`flex items-center justify-center gap-1 w-full sm:w-auto rounded border px-2 py-2 text-xs transition-colors sm:py-1.5 whitespace-nowrap ${
                     grokStatus.installed
