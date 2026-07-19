@@ -93,9 +93,12 @@ export default function ToolDetailClient({ toolId, machineId }) {
   }, []);
 
   const getBaseUrl = () => {
+    if (typeof window !== "undefined" && window.location.origin) {
+      const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+      return window.location.origin + basePath;
+    }
     if (tunnelEnabled && tunnelPublicUrl) return tunnelPublicUrl;
     if (cloudEnabled && CLOUD_URL) return CLOUD_URL;
-    if (typeof window !== "undefined") return window.location.origin;
     return "http://localhost:20128";
   };
 
