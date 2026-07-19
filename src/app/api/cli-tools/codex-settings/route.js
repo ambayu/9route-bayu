@@ -181,7 +181,7 @@ if ($null -eq $c) { $c = '' }
 
 # Ensure model_provider = "9router" is set
 if ($c -notlike '*model_provider = "9router"*') {
-    $c = "model_provider = `"9router\`"\`r\`n" + $c
+    $c = \"model_provider = \`\"9router\`\"\`r\`n\" + $c
 }
 
 # Remove any old 9router sections
