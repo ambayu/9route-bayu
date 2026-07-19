@@ -92,8 +92,82 @@ const has9RouterConfig = (config) => {
 };
 
 // GET - Check codex CLI and read current settings
-export async function GET() {
+export async function GET(request) {
   try {
+    const url = new URL(request.url);
+    const action = url.searchParams.get("action");
+
+    if (action === "download-switcher") {
+      const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || "localhost:20127";
+      let proto = request.headers.get("x-forwarded-proto") || "http";
+      // Auto-detect secure connection if host has standard SSL indicators or port is 443
+      if (host.includes("umnaw.ac.id") || host.endsWith(":443")) {
+        proto = "https";
+      }
+      const basePath = "/route9"; // Standard deployment path prefix
+      const displayUrl = `${proto}://${host}${basePath}/v1`;
+
+      const scriptContent = `import os
+import re
+
+def main():
+    config_path = os.path.expanduser(r"~\\\\.codex\\\\config.toml")
+    
+    if not os.path.exists(config_path):
+        print(f"Codex config file not found at {config_path}")
+        print("Please configure Codex through the dashboard first to generate the file.")
+        return
+        
+    print("=========================================")
+    print("   Codex Endpoint Switcher (9Router)")
+    print("=========================================")
+    print("Select target 9Router server:")
+    print(" [1] Local 9Router (http://localhost:20127/v1)")
+    print(" [2] Remote 9Router (${displayUrl})")
+    print("=========================================")
+    
+    choice = input("Enter choice (1 or 2): ").strip()
+    
+    if choice == "1":
+        new_url = "http://localhost:20127/v1"
+        label = "Local 9Router"
+    elif choice == "2":
+        new_url = "${displayUrl}"
+        label = "Remote 9Router"
+    else:
+        print("Invalid choice. Exiting.")
+        return
+        
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            content = f.read()
+            
+        pattern = r'(base_url\\\\s*=\\\\s*")[^"]+(")'
+        if not re.search(pattern, content):
+            print("Could not locate base_url inside config.toml. Creating a clean config...")
+            content += f'\\\\nbase_url = "{new_url}"\\\\n'
+        else:
+            content = re.sub(pattern, rf'\\\\g<1>{new_url}\\\\g<2>', content)
+            
+        with open(config_path, "w", encoding="utf-8") as f:
+            f.write(content)
+            
+        print(f"\\\\n[SUCCESS] Codex config updated to point to: {label} ({new_url})")
+        
+    except Exception as e:
+        print(f"Failed to update config.toml: {e}")
+
+if __name__ == '__main__':
+    main()
+`;
+      return new NextResponse(scriptContent, {
+        headers: {
+          "Content-Type": "application/x-python",
+          "Content-Disposition": "attachment; filename=\"switch-endpoint.py\"",
+        },
+      });
+    }
+
     const isInstalled = await checkCodexInstalled();
     const config = await readConfig();
 

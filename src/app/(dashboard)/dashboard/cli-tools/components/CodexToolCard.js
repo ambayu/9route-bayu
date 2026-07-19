@@ -328,18 +328,31 @@ model = "${effectiveSubagentModel}"
             <>
               <div className="flex flex-col gap-2">
                 {/* Endpoint (selector) */}
-                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr] sm:items-center sm:gap-2">
-                  <span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">Select Endpoint</span>
-                  <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">arrow_forward</span>
-                  <BaseUrlSelect
-                    value={customBaseUrl || getDisplayUrl()}
-                    onChange={setCustomBaseUrl}
-                    requiresExternalUrl={tool.requiresExternalUrl}
-                    tunnelEnabled={tunnelEnabled}
-                    tunnelPublicUrl={tunnelPublicUrl}
-                    tailscaleEnabled={tailscaleEnabled}
-                    tailscaleUrl={tailscaleUrl}
-                  />
+                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr] sm:items-start sm:gap-2">
+                  <span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm mt-1.5">Select Endpoint</span>
+                  <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline mt-2">arrow_forward</span>
+                  <div className="flex flex-col gap-1 w-full">
+                    <BaseUrlSelect
+                      value={customBaseUrl || getDisplayUrl()}
+                      onChange={setCustomBaseUrl}
+                      requiresExternalUrl={tool.requiresExternalUrl}
+                      tunnelEnabled={tunnelEnabled}
+                      tunnelPublicUrl={tunnelPublicUrl}
+                      tailscaleEnabled={tailscaleEnabled}
+                      tailscaleUrl={tailscaleUrl}
+                    />
+                    {typeof window !== "undefined" && (
+                      <a
+                        href={`${window.location.pathname.split("/dashboard")[0]}/api/cli-tools/codex-settings?action=download-switcher`}
+                        download
+                        className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline w-fit mt-1"
+                        title="Download python script to easily toggle between Local and VPS endpoints for Codex"
+                      >
+                        <span className="material-symbols-outlined text-[13px]">download</span>
+                        Download Switcher Script (Python)
+                      </a>
+                    )}
+                  </div>
                 </div>
 
                 {/* Current configured */}
