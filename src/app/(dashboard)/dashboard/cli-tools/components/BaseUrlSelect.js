@@ -32,6 +32,14 @@ const writeSavedPresets = (presets) => {
 const buildOptions = ({ requiresExternalUrl, tunnelEnabled, tunnelPublicUrl, tailscaleEnabled, tailscaleUrl, cloudEnabled, cloudUrl, savedPresets, withV1 }) => {
   const opts = [];
   const wrap = (url) => (withV1 ? ensureV1(url) : (url || "").replace(/\/+$/, ""));
+
+  if (typeof window !== "undefined") {
+    const currentOrigin = window.location.origin;
+    const currentBasePath = window.location.pathname.split("/dashboard")[0] || "";
+    const currentUrl = wrap(`${currentOrigin}${currentBasePath}`);
+    opts.push({ value: "current-browser", label: `${currentUrl} (Current)`, url: currentUrl });
+  }
+
   if (!requiresExternalUrl) {
     const localUrl = wrap(`http://127.0.0.1:${UPDATER_CONFIG.appPort}`);
     opts.push({ value: "local", label: localUrl, url: localUrl });
