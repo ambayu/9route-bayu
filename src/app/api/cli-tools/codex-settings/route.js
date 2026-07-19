@@ -207,6 +207,10 @@ if ($apiKeyToSet) {
         $j | ConvertTo-Json | Set-Content $authPath
     }
 }
+# Force close running Codex processes to apply settings immediately
+Write-Host "Restarting Codex to apply changes..." -ForegroundColor Yellow
+Stop-Process -Name codex -Force -ErrorAction SilentlyContinue
+Stop-Process -Name codex-agent -Force -ErrorAction SilentlyContinue
 
 Write-Host ""
 Write-Host "[SUCCESS] Codex config updated to point to: $label ($newUrl)" -ForegroundColor Green
