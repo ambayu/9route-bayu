@@ -234,12 +234,12 @@ $c += $localSection + $vpsSection
 
 # Update or add [models] default
 if ($c -match '(?m)^\\[models\\]') {
-    $c = $c -replace '(?m)^default\\s*=\\s*"[^"]*"', \"default = \"9router-vps\"\"
+    $c = $c -replace '(?m)^default\\s*=\\s*"[^"]*"', \"default = \`\"9router-vps\`\"\"
     if ($c -notmatch '(?m)^default\\s*=') {
-        $c = $c -replace '(?m)(^\\[models\\])', \"\\$1\\ndefault = \"9router-vps\"\"
+        $c = $c -replace '(?m)(^\\[models\\])', \"\\$1\`r\`ndefault = \`\"9router-vps\`\"\"
     }
 } else {
-    $c = \"[models]\\ndefault = \"9router-vps\"\\n\" + $c
+    $c = \"[models]\`r\`ndefault = \`\"9router-vps\`\"\`r\`n\" + $c
 }
 
 if (\"$newUrl\" -eq \"${localBaseUrl}\") {
