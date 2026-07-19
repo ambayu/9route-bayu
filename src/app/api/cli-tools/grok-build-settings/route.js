@@ -229,7 +229,7 @@ $c = $c.Trim()
 
 # Add model slots for both local and VPS
 $localSection = \"\`r\`n\`r\`n[model.9router-local]\`r\`nmodel = \`\"grok-4\`\"\`r\`nbase_url = \`\"${localBaseUrl}\`\"\`r\`nname = \`\"9Router Local\`\"\`r\`ndescription = \`\"Local 9Router gateway\`\"\`r\`napi_backend = \`\"chat_completions\`\"\`r\`napi_key = \`\"sk_9router\`\"\`r\`n\"
-$vpsSection   = \"\`r\`n\`r\`n[model.9router-vps]\`r\`nmodel = \`\"grok-4\`\"\`r\`nbase_url = \`\"${vpsBaseUrl}\`\"\`r\`nname = \`\"9Router VPS\`\"\`r\`ndescription = \`\"Remote 9Router gateway\`\"\`r\`napi_backend = \`\"chat_completions\`\"\`r\`napi_key = \`\"${vpsApiKey}\"\`r\`n\"
+$vpsSection   = \"\`r\`n\`r\`n[model.9router-vps]\`r\`nmodel = \`\"grok-4\`\"\`r\`nbase_url = \`\"${vpsBaseUrl}\`\"\`r\`nname = \`\"9Router VPS\`\"\`r\`ndescription = \`\"Remote 9Router gateway\`\"\`r\`napi_backend = \`\"chat_completions\`\"\`r\`napi_key = \`\"${vpsApiKey}\`\"\`r\`n\"
 $c += $localSection + $vpsSection
 
 # Update or add [models] default
