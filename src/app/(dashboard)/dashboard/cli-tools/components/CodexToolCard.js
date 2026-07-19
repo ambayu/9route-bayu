@@ -344,12 +344,12 @@ model = "${effectiveSubagentModel}"
                     {typeof window !== "undefined" && (
                       <a
                         href={`${window.location.pathname.split("/dashboard")[0]}/api/cli-tools/codex-settings?action=download-switcher`}
-                        download
+                        download="switch-endpoint.bat"
                         className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline w-fit mt-1"
-                        title="Download python script to easily toggle between Local and VPS endpoints for Codex"
+                        title="Download Windows Batch script (.bat) to easily toggle between Local and VPS endpoints for Codex with a single double-click"
                       >
                         <span className="material-symbols-outlined text-[13px]">download</span>
-                        Download Switcher Script (Python)
+                        Download Switcher Script (Windows Batch)
                       </a>
                     )}
                   </div>

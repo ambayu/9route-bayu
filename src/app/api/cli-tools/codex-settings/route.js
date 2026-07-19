@@ -107,97 +107,50 @@ export async function GET(request) {
       const basePath = "/route9"; // Standard deployment path prefix
       const displayUrl = `${proto}://${host}${basePath}/v1`;
 
-      const scriptContent = `import os
-import re
-import json
+      const scriptContent = `@echo off
+title Codex Endpoint Switcher (9Router)
+cls
 
-def clean_toml(content):
-    content = re.sub(r'model_provider\\s*=\\s*"9router"\\s*\\n?', '', content)
-    content = re.sub(r'\\[model_providers\\.9router\\](?:[\\s\\S]*?)(?=\\n\\[|\\Z)', '', content)
-    content = re.sub(r'\\[agents\\.subagent\\](?:[\\s\\S]*?)(?=\\n\\[|\\Z)', '', content)
-    return content.strip() + "\\n"
+echo ==================================================
+echo       Codex Endpoint Switcher (9Router)
+echo ==================================================
+echo.
+echo Select target 9Router server:
+echo  [1] Local 9Router (http://localhost:20127/v1)
+echo  [2] Remote 9Router   (${displayUrl})
+echo  [3] Original Codex API (Default Official)
+echo.
+echo ==================================================
+set /p choice="Enter choice (1, 2, or 3): "
 
-def main():
-    config_path = os.path.expanduser(r"~\\\\.codex\\\\config.toml")
-    auth_path = os.path.expanduser(r"~\\\\.codex\\\\auth.json")
-    
-    if not os.path.exists(config_path):
-        print(f"Codex config file not found at {config_path}")
-        print("Please configure Codex through the dashboard first to generate the file.")
-        return
-        
-    print("=========================================")
-    print("   Codex Endpoint Switcher (9Router)")
-    print("=========================================")
-    print("Select target 9Router server:")
-    print(" [1] Local 9Router (http://localhost:20127/v1)")
-    print(" [2] Remote 9Router (${displayUrl})")
-    print(" [3] Original Codex API (Default Official)")
-    print("=========================================")
-    
-    choice = input("Enter choice (1, 2, or 3): ").strip()
-    
-    if choice == "3":
-        try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            cleaned_content = clean_toml(content)
-            with open(config_path, "w", encoding="utf-8") as f:
-                f.write(cleaned_content)
-            
-            if os.path.exists(auth_path):
-                with open(auth_path, "r", encoding="utf-8") as f:
-                    auth_data = json.load(f)
-                
-                auth_data.pop("OPENAI_API_KEY", None)
-                auth_data.pop("auth_mode", None)
-                
-                if not auth_data:
-                    os.remove(auth_path)
-                else:
-                    with open(auth_path, "w", encoding="utf-8") as f:
-                        json.dump(auth_data, f, indent=2)
-                        
-            print("\\n[SUCCESS] Codex config restored to original official settings.")
-        except Exception as e:
-            print(f"Failed to restore official settings: {e}")
-        return
-        
-    if choice == "1":
-        new_url = "http://localhost:20127/v1"
-        label = "Local 9Router"
-    elif choice == "2":
-        new_url = "${displayUrl}"
-        label = "Remote 9Router"
-    else:
-        print("Invalid choice. Exiting.")
-        return
-        
-    try:
-        with open(config_path, "r", encoding="utf-8") as f:
-            content = f.read()
-            
-        if 'model_provider = "9router"' not in content:
-            content += '\\nmodel_provider = "9router"\\n\\n[model_providers.9router]\\nname = "9Router"\\nbase_url = ""\\nwire_api = "responses"\\n'
-            
-        pattern = r'(base_url\\\\s*=\\\\s*")[^"]*(")'
-        content = re.sub(pattern, rf'\\\\g<1>{new_url}\\\\g<2>', content)
-            
-        with open(config_path, "w", encoding="utf-8") as f:
-            f.write(content)
-            
-        print(f"\\\\n[SUCCESS] Codex config updated to point to: {label} ({new_url})")
-        
-    except Exception as e:
-        print(f"Failed to update config.toml: {e}")
+if "%choice%"=="1" (
+    echo Switching to Local 9Router...
+    powershell -Command "$p = join-path $env:USERPROFILE '.codex\\config.toml'; if (Test-Path $p) { $c = Get-Content $p -Raw; if ($c -notlike '*model_provider = \\\"9router\\\"*') { $c += \\\"\\\`r\\\`nmodel_provider = \\\`\"9router\\\`\"\\\`r\\\`n\\\`r\\\`n[model_providers.9router]\\\`r\\\`nname = \\\`\"9Router\\\`\"\\\`r\\\`nbase_url = \\\`\"\\\`\"\\\`r\\\`nwire_api = \\\`\"responses\\\`\"\\\`r\\\`n\\\" }; $c -replace '(base_url\\s*=\\s*\\\")[^\\\"]*(\\\")', \\\"\${1}http://localhost:20127/v1\${2}\\\" | Set-Content $p; Write-Host '[SUCCESS] Codex config updated to point to Local 9Router' -ForegroundColor Green } else { Write-Host 'config.toml not found.' -ForegroundColor Red }"
+    goto end
+)
 
-if __name__ == '__main__':
-    main()
+if "%choice%"=="2" (
+    echo Switching to Remote 9Router...
+    powershell -Command "$p = join-path $env:USERPROFILE '.codex\\config.toml'; if (Test-Path $p) { $c = Get-Content $p -Raw; if ($c -notlike '*model_provider = \\\"9router\\\"*') { $c += \\\"\\\`r\\\`nmodel_provider = \\\`\"9router\\\`\"\\\`r\\\`n\\\`r\\\`n[model_providers.9router]\\\`r\\\`nname = \\\`\"9Router\\\`\"\\\`r\\\`nbase_url = \\\`\"\\\`\"\\\`r\\\`nwire_api = \\\`\"responses\\\`\"\\\`r\\\`n\\\" }; $c -replace '(base_url\\s*=\\s*\\\")[^\\\"]*(\\\")', \\\"\${1}${displayUrl}\${2}\\\" | Set-Content $p; Write-Host '[SUCCESS] Codex config updated to point to Remote 9Router' -ForegroundColor Green } else { Write-Host 'config.toml not found.' -ForegroundColor Red }"
+    goto end
+)
+
+if "%choice%"=="3" (
+    echo Reverting to Official Codex Settings...
+    powershell -Command "$p = join-path $env:USERPROFILE '.codex\\config.toml'; $a = join-path $env:USERPROFILE '.codex\\auth.json'; if (Test-Path $p) { $c = Get-Content $p -Raw; $c = $c -replace 'model_provider\\s*=\\s*\\\"9router\\\"\\s*\\r?\\n?', ''; $c = $c -replace '(?s)\\[model_providers\\.9router\\].*?(?=\\r?\\n\\[|\\Z)', ''; $c = $c -replace '(?s)\\[agents\\.subagent\\].*?(?=\\r?\\n\\[|\\Z)', ''; Set-Content $p $c.Trim(); Write-Host 'config.toml restored' -ForegroundColor Green }; if (Test-Path $a) { $j = Get-Content $a | ConvertFrom-Json; $j.psobject.properties.remove('OPENAI_API_KEY'); $j.psobject.properties.remove('auth_mode'); if (($j | Get-Member -MemberType NoteProperty).Count -eq 0) { Remove-Item $a } else { $j | ConvertTo-Json | Set-Content $a }; Write-Host 'auth.json restored' -ForegroundColor Green }"
+    goto end
+)
+
+echo Invalid choice. Exiting.
+
+:end
+echo.
+pause
 `;
       return new NextResponse(scriptContent, {
         headers: {
-          "Content-Type": "application/x-python",
-          "Content-Disposition": "attachment; filename=\"switch-endpoint.py\"",
+          "Content-Type": "application/x-bat",
+          "Content-Disposition": "attachment; filename=\"switch-endpoint.bat\"",
         },
       });
     }
