@@ -250,6 +250,15 @@ api_key = "${keyToUse}"
                     <span className="material-symbols-outlined text-[18px] mr-1">content_copy</span>
                     Manual Config
                   </Button>
+                  <a
+                    href="/api/cli-tools/grok-build-settings?action=download-switcher"
+                    download="switch-grok-endpoint.bat"
+                    className="flex items-center justify-center gap-1 w-full sm:w-auto rounded border border-yellow-500/40 bg-yellow-500/20 px-2 py-2 text-xs text-yellow-700 dark:text-yellow-300 hover:bg-yellow-500/30 transition-colors sm:py-1.5"
+                    title="Download Windows batch file to configure Grok Build for Local or VPS 9Router"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">download</span>
+                    <span>Download Switcher Script (Windows)</span>
+                  </a>
                 </div>
               </div>
             </div>
