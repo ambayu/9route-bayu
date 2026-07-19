@@ -164,7 +164,6 @@ echo Pause >> "%temp_ps1%"
 powershell -NoProfile -ExecutionPolicy Bypass -File "%temp_ps1%"
 del "%temp_ps1%"
 `;
-`;
       return new NextResponse(scriptContent, {
         headers: {
           "Content-Type": "application/x-bat",
