@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { exec } from "child_process";
 import { promisify } from "util";
+import { getApiKeys } from "@/lib/localDb";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
@@ -106,6 +107,14 @@ export async function GET(request) {
       const basePath = "/route9"; // Standard deployment path prefix
       const displayUrl = `${proto}://${host}${basePath}/v1`;
 
+      // Fetch first active API key from DB to embed in the switcher script
+      let vpsApiKey = "sk_9router";
+      try {
+        const apiKeys = await getApiKeys();
+        const activeKey = apiKeys.find(k => k.isActive);
+        if (activeKey?.key) vpsApiKey = activeKey.key;
+      } catch { /* fallback to default */ }
+
       const psScript = `$configPath = Join-Path $env:USERPROFILE '.codex\\config.toml'
 $authPath = Join-Path $env:USERPROFILE '.codex\\auth.json'
 
@@ -132,10 +141,12 @@ $choice = Read-Host "Enter choice (1, 2, or 3)"
 if ($choice -eq '1') {
     $newUrl = "http://localhost:20127/v1"
     $label = "Local 9Router"
+    $apiKeyToSet = $null
 }
 elseif ($choice -eq '2') {
     $newUrl = "${displayUrl}"
     $label = "Remote 9Router"
+    $apiKeyToSet = "${vpsApiKey}"
 }
 elseif ($choice -eq '3') {
     Write-Host "Reverting to Official Codex Settings..." -ForegroundColor Yellow
@@ -145,7 +156,6 @@ elseif ($choice -eq '3') {
     $c = $c -replace '(?s)\\[agents\\.subagent\\].*?(?=\\r?\\n\\[|\\Z)', ''
     Set-Content $configPath $c.Trim()
     Write-Host "config.toml restored" -ForegroundColor Green
-    
     if (Test-Path $authPath) {
         $j = Get-Content $authPath | ConvertFrom-Json
         $j.psobject.properties.remove('OPENAI_API_KEY')
@@ -173,6 +183,30 @@ if ($c -notlike '*model_provider = "9router"*') {
 
 $c = $c -replace '(base_url\\s*=\\s*")[^"]*(")', "\`$1$newUrl\`$2"
 Set-Content $configPath $c
+
+# Set API key in auth.json if switching to VPS
+if ($apiKeyToSet) {
+    $authDir = Split-Path $authPath
+    if (-not (Test-Path $authDir)) { New-Item -ItemType Directory -Path $authDir -Force | Out-Null }
+    if (Test-Path $authPath) {
+        $j = Get-Content $authPath | ConvertFrom-Json
+    } else {
+        $j = [PSCustomObject]@{}
+    }
+    $j | Add-Member -MemberType NoteProperty -Name 'OPENAI_API_KEY' -Value $apiKeyToSet -Force
+    $j | Add-Member -MemberType NoteProperty -Name 'auth_mode' -Value 'api_key' -Force
+    $j | ConvertTo-Json | Set-Content $authPath
+    Write-Host "API key set in auth.json" -ForegroundColor Green
+} elseif (Test-Path $authPath) {
+    $j = Get-Content $authPath | ConvertFrom-Json
+    $j.psobject.properties.remove('OPENAI_API_KEY')
+    $j.psobject.properties.remove('auth_mode')
+    if (($j | Get-Member -MemberType NoteProperty).Count -eq 0) {
+        Remove-Item $authPath
+    } else {
+        $j | ConvertTo-Json | Set-Content $authPath
+    }
+}
 
 Write-Host ""
 Write-Host "[SUCCESS] Codex config updated to point to: $label ($newUrl)" -ForegroundColor Green

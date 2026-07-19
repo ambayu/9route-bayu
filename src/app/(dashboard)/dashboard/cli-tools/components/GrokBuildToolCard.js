@@ -361,7 +361,17 @@ api_key = "${keyToUse}"
                 <Button variant="ghost" size="sm" onClick={() => setShowManualConfigModal(true)} className="w-full sm:w-auto">
                   <span className="material-symbols-outlined text-[14px] mr-1">content_copy</span>Manual Config
                 </Button>
+                <a
+                  href="/api/cli-tools/grok-build-settings?action=download-switcher"
+                  download="switch-grok-endpoint.bat"
+                  className="flex items-center justify-center gap-1 w-full sm:w-auto rounded border border-border px-2 py-2 text-xs text-text-main hover:border-primary hover:text-primary transition-colors sm:py-1.5"
+                  title="Download a Windows batch file to switch Grok Build between Local and VPS endpoints"
+                >
+                  <span className="material-symbols-outlined text-[14px]">download</span>
+                  <span>Download Switcher Script</span>
+                </a>
               </div>
+
             </>
           )}
         </div>
