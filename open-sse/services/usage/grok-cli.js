@@ -112,12 +112,21 @@ function makeQuota({ used, total, resetAt, unlimited = false }) {
  * Map billing JSON → normalized quotas object for the dashboard.
  * Returns { quotas, periodEnd, exhaustedHint } or empty quotas when nothing usable.
  */
-export function parseGrokCliBilling(billing, user = null) {
+export function parseGrokCliBilling(billing, user = null, providerSpecificData = null) {
   const root = billing && typeof billing === "object" ? billing : {};
   const config =
     root.config && typeof root.config === "object" && !Array.isArray(root.config)
       ? root.config
       : root;
+
+  const psd = providerSpecificData || {};
+  const isBlockedOrExhausted =
+    Boolean(user?.userBlockedReason) ||
+    (Array.isArray(user?.teamBlockedReasons) && user.teamBlockedReasons.length > 0) ||
+    psd.errorCode === 402 ||
+    psd.errorCode === "402" ||
+    (typeof psd.lastError === "string" &&
+      (psd.lastError.includes("exhausted") || psd.lastError.includes("402")));
 
   const periodEnd =
     parseResetTime(config.billingPeriodEnd) ||
@@ -191,36 +200,30 @@ export function parseGrokCliBilling(billing, user = null) {
   // Primary: on-demand spending window (subscription / promo credits)
   const onDemandCap = unwrapVal(config.onDemandCap ?? root.onDemandCap, NaN);
   const onDemandUsed = unwrapVal(config.onDemandUsed ?? root.onDemandUsed, NaN);
-  if (Number.isFinite(onDemandCap) && onDemandCap > 0) {
+  if (isBlockedOrExhausted) {
+    // Explicitly blocked/exhausted (chat returns 402 or spending-limit)
+    quotas["On-demand"] = {
+      used: 1,
+      total: 1,
+      remainingPercentage: 0,
+      resetAt: periodEnd,
+      unlimited: false,
+    };
+  } else if (Number.isFinite(onDemandCap) && onDemandCap > 0) {
     const used = Number.isFinite(onDemandUsed) ? Math.max(0, onDemandUsed) : 0;
     quotas["On-demand"] = makeQuota({
       used,
       total: onDemandCap,
       resetAt: periodEnd,
     });
-  } else if (Number.isFinite(onDemandCap) && onDemandCap === 0 && Number.isFinite(onDemandUsed)) {
-    const isPaidSubscriber = subscriptionAccess || user?.subscriptionTier === "GrokPro" || user?.subscriptionTier === "SuperGrok";
-    const hasActiveUsageMetrics = Number.isFinite(creditUsagePercent) || (Array.isArray(productUsageList) && productUsageList.length > 0);
-
-    if (isPaidSubscriber || hasActiveUsageMetrics) {
-      // Grok Pro / paid subscriptions have active usage
-      if (!quotas["Weekly Credit Usage"] && !quotas["GrokBuild Usage"]) {
-        quotas["Weekly Allowance"] = makeQuota({
-          used: onDemandUsed || 0,
-          total: 0,
-          resetAt: periodEnd,
-          unlimited: true,
-        });
-      }
-    } else {
-      // Free / promo tier that has hit spending limit (0 cap, 0 prepaid balance, 402 on chat)
-      quotas["On-demand"] = {
-        used: 1,
-        total: 1,
-        remainingPercentage: 0,
+  } else if (Number.isFinite(onDemandCap) && onDemandCap === 0) {
+    if (!quotas["Weekly Credit Usage"] && !quotas["GrokBuild Usage"]) {
+      quotas["On-demand"] = makeQuota({
+        used: onDemandUsed || 0,
+        total: 0,
         resetAt: periodEnd,
-        unlimited: false,
-      };
+        unlimited: true,
+      });
     }
   }
 
@@ -342,7 +345,7 @@ export async function getGrokCliUsage(accessToken, providerSpecificData = null, 
       user = await userRes.json().catch(() => null);
     }
 
-    const parsed = parseGrokCliBilling(billing, user);
+    const parsed = parseGrokCliBilling(billing, user, providerSpecificData);
 
     if (!parsed.quotas || Object.keys(parsed.quotas).length === 0) {
       return {
