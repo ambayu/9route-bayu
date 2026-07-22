@@ -84,7 +84,15 @@ export class AntigravityExecutor extends BaseExecutor {
       tools = allDeclarations.length > 0 ? [{ functionDeclarations: allDeclarations }] : [];
     }
 
-    const { tools: _originalTools, toolConfig: _originalToolConfig, ...requestWithoutTools } = body.request || {};
+    // Strip tools, toolConfig, AND Claude-native thinking fields from request envelope.
+    // `thinking` and `output_config` must NEVER reach the Gemini Cloud Code endpoint.
+    const {
+      tools: _originalTools,
+      toolConfig: _originalToolConfig,
+      thinking: _rThinking,
+      output_config: _rOutputConfig,
+      ...requestWithoutTools
+    } = body.request || {};
     const generationConfig = { ...(requestWithoutTools.generationConfig || {}) };
     if (generationConfig.maxOutputTokens > MAX_ANTIGRAVITY_OUTPUT_TOKENS) {
       generationConfig.maxOutputTokens = MAX_ANTIGRAVITY_OUTPUT_TOKENS;
@@ -99,6 +107,7 @@ export class AntigravityExecutor extends BaseExecutor {
       safetySettings: undefined,
       ...(tools?.length > 0 && { toolConfig: { functionCallingConfig: { mode: "VALIDATED" } } })
     };
+
 
     this._lastSessionId = transformedRequest.sessionId; // cached for buildHeaders (base.execute order)
 
