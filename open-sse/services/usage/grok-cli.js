@@ -158,6 +158,36 @@ export function parseGrokCliBilling(billing, user = null) {
     });
   }
 
+  // Check xAI Grok Build / Grok Pro creditUsagePercent (0-100%)
+  const creditUsagePercent = unwrapVal(config.creditUsagePercent ?? root.creditUsagePercent, NaN);
+  if (Number.isFinite(creditUsagePercent)) {
+    const remainingPct = Math.max(0, Math.min(100, 100 - creditUsagePercent));
+    quotas["Weekly Credit Usage"] = {
+      used: creditUsagePercent,
+      total: 100,
+      remainingPercentage: remainingPct,
+      resetAt: periodEnd,
+      unlimited: false,
+    };
+  }
+
+  // Check productUsage array (e.g. [{ product: "GrokBuild", usagePercent: 74 }])
+  const productUsageList = config.productUsage || root.productUsage;
+  if (Array.isArray(productUsageList)) {
+    for (const prod of productUsageList) {
+      if (prod && prod.product && Number.isFinite(prod.usagePercent)) {
+        const remainingPct = Math.max(0, Math.min(100, 100 - prod.usagePercent));
+        quotas[`${prod.product} Usage`] = {
+          used: prod.usagePercent,
+          total: 100,
+          remainingPercentage: remainingPct,
+          resetAt: periodEnd,
+          unlimited: false,
+        };
+      }
+    }
+  }
+
   // Primary: on-demand spending window (subscription / promo credits)
   const onDemandCap = unwrapVal(config.onDemandCap ?? root.onDemandCap, NaN);
   const onDemandUsed = unwrapVal(config.onDemandUsed ?? root.onDemandUsed, NaN);
@@ -169,17 +199,18 @@ export function parseGrokCliBilling(billing, user = null) {
       resetAt: periodEnd,
     });
   } else if (Number.isFinite(onDemandCap) && onDemandCap === 0 && Number.isFinite(onDemandUsed)) {
-    if (subscriptionAccess || user?.hasGrokCodeAccess === true || user?.subscriptionTier === "GrokPro") {
-      // Grok Pro / Grok Code personal subscriptions have unlimited usage (no credit caps)
-      quotas["On-demand"] = makeQuota({
-        used: onDemandUsed || 0,
-        total: 0,
-        resetAt: periodEnd,
-        unlimited: true,
-      });
+    if (subscriptionAccess || user?.hasGrokCodeAccess === true || user?.subscriptionTier === "GrokPro" || config?.isUnifiedBillingUser === true) {
+      // Grok Pro / Grok Code personal subscriptions have active usage
+      if (!quotas["Weekly Credit Usage"] && !quotas["GrokBuild Usage"]) {
+        quotas["Weekly Allowance"] = makeQuota({
+          used: onDemandUsed || 0,
+          total: 0,
+          resetAt: periodEnd,
+          unlimited: true,
+        });
+      }
     } else {
       // Cap 0 is the exhausted free/promo state (chat returns 402 spending-limit).
-      // UI treats total===0 as unlimited, so use a synthetic 1/1 depleted row.
       quotas["On-demand"] = {
         used: 1,
         total: 1,
