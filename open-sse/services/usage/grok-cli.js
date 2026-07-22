@@ -125,8 +125,11 @@ export function parseGrokCliBilling(billing, user = null, providerSpecificData =
     (Array.isArray(user?.teamBlockedReasons) && user.teamBlockedReasons.length > 0) ||
     psd.errorCode === 402 ||
     psd.errorCode === "402" ||
+    psd.errorCode === 429 ||
+    psd.errorCode === "429" ||
+    psd.testStatus === "unavailable" ||
     (typeof psd.lastError === "string" &&
-      (psd.lastError.includes("exhausted") || psd.lastError.includes("402")));
+      (psd.lastError.includes("exhausted") || psd.lastError.includes("402") || psd.lastError.includes("429")));
 
   const periodEnd =
     parseResetTime(config.billingPeriodEnd) ||
