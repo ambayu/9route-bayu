@@ -484,6 +484,17 @@ export async function buildModelsList(kindFilter, options = {}) {
     }
   }
 
+  // Append configured model aliases directly to the models list so client pickers (e.g. VSCode) display them
+  for (const [aliasKey] of Object.entries(modelAliases || {})) {
+    if (typeof aliasKey === "string" && aliasKey.trim() !== "") {
+      models.push({
+        id: aliasKey,
+        object: "model",
+        owned_by: "alias",
+      });
+    }
+  }
+
   const dedupedModels = [];
   const seenModelIds = new Set();
   for (const model of models) {
