@@ -104,8 +104,12 @@ export class AntigravityExecutor extends BaseExecutor {
 
     const resolvedModel = getModelUpstreamId("antigravity", model) || getModelUpstreamId("ag", model) || model;
 
+    // Strip top-level body fields before spread. Claude-native thinking fields
+    // (`thinking`, `output_config`) must NEVER reach the Gemini Cloud Code endpoint.
+    const { thinking: _t, output_config: _oc, ...cleanBody } = body;
+
     return {
-      ...body,
+      ...cleanBody,
       project: projectId,
       model: resolvedModel,
       userAgent: "antigravity",
