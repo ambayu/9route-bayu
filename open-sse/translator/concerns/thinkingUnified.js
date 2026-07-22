@@ -103,10 +103,20 @@ export function extractThinking(body) {
 // at the call-site where intent is snapshotted before format translation.
 export const captureThinking = extractThinking;
 
-// Resolve thinking format: provider override > capability > derive(targetFormat).
+// Resolve thinking format: provider override > target wire-format > capability > derive(targetFormat).
+// IMPORTANT: Antigravity always wraps ALL models (including Claude) in a Gemini Cloud Code
+// envelope. The Gemini endpoint does NOT accept Claude-native fields like `thinking` or
+// `output_config` — they must use Gemini's `generationConfig.thinkingConfig` instead.
+// So for antigravity target, always use gemini-budget regardless of model capability.
 function resolveFormat(targetFormat, model, provider) {
   const providerFmt = provider ? PROVIDERS[provider]?.thinkingFormat : null;
   if (providerFmt) return providerFmt;
+  // Gemini-family wire formats always use Gemini thinking fields even when the
+  // underlying model ID is a Claude alias (e.g. claude-sonnet-4-6 via Antigravity).
+  if (FORMAT_TO_NATIVE[targetFormat]) {
+    const wireDefault = FORMAT_TO_NATIVE[targetFormat];
+    if (wireDefault === "gemini-budget" || wireDefault === "gemini-level") return wireDefault;
+  }
   const caps = getCapabilitiesForModel(provider, model);
   if (caps.thinkingFormat) return caps.thinkingFormat;
   return FORMAT_TO_NATIVE[targetFormat] || "openai";
