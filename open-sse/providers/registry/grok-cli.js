@@ -77,7 +77,12 @@ export default {
     { id: "grok-4.5-high", name: "Grok 4.5 (High)", upstreamModelId: "grok-4.5" },
     { id: "grok-4.5-medium", name: "Grok 4.5 (Medium)", upstreamModelId: "grok-4.5" },
     { id: "grok-4.5-low", name: "Grok 4.5 (Low)", upstreamModelId: "grok-4.5" },
+    { id: "grok-2-image-1212", name: "Grok 2 Image", params: ["n","response_format"], kind: "image" },
+    { id: "grok-imagine-video", name: "Grok Imagine Video", params: ["duration","aspect_ratio","resolution"], kind: "video" },
   ],
+  serviceKinds: ["llm", "image", "video"],
+  imageConfig: { baseUrl: `${GROK_CLI_BASE_URL}/images/generations`, bodyFields: ["model","prompt","n","response_format"] },
+  videoConfig: { baseUrl: `${GROK_CLI_BASE_URL}/videos` },
   features: {
     usage: true,
   },

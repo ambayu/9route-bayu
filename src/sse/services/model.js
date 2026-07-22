@@ -7,6 +7,7 @@ import REGISTRY from "open-sse/providers/registry/index.js";
 const LOCAL_PROVIDER_ALIASES = {
   xmtp: "xiaomi-tokenplan",
   "xiaomi-tokenplan": "xiaomi-tokenplan",
+  xai: "grok-cli",
 };
 
 const RESERVED_PROVIDER_PREFIXES = new Set(Object.keys(LOCAL_PROVIDER_ALIASES));
@@ -32,7 +33,7 @@ export async function resolveModelAlias(alias) {
   return resolveModelAliasFromMap(alias, aliases);
 }
 
-async function resolveNodePrefix(providerAlias, model) {
+async function resolveNodePrefix(resolvedProvider, providerAlias, model) {
   if (providerAlias && !RESERVED_PROVIDER_PREFIXES.has(providerAlias)) {
     const openaiNodes = await getProviderNodes({ type: "openai-compatible" });
     const matchedOpenAI = openaiNodes.find((node) => node.prefix === providerAlias);
@@ -52,7 +53,7 @@ async function resolveNodePrefix(providerAlias, model) {
       return { provider: matchedEmbedding.id, model };
     }
   }
-  return { provider: providerAlias, model };
+  return { provider: resolvedProvider, model };
 }
 
 /**
@@ -62,7 +63,7 @@ export async function getModelInfo(modelStr) {
   const parsed = parseModel(modelStr);
 
   if (!parsed.isAlias) {
-    return await resolveNodePrefix(parsed.providerAlias, parsed.model);
+    return await resolveNodePrefix(parsed.provider, parsed.providerAlias, parsed.model);
   }
 
   // Check if this is a combo name before resolving as alias
@@ -75,7 +76,7 @@ export async function getModelInfo(modelStr) {
   }
 
   const resolved = await getModelInfoCore(modelStr, getModelAliases);
-  return await resolveNodePrefix(resolved.provider, resolved.model);
+  return await resolveNodePrefix(resolved.provider, parsed.providerAlias || resolved.provider, resolved.model);
 }
 
 /**

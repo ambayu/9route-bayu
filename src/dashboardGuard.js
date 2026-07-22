@@ -210,6 +210,8 @@ export async function proxy(request) {
     if (isPublicApi(pathname)) return NextResponse.next();
     if (await hasValidCliToken(request) || await isAuthenticated(request))
       return NextResponse.next();
+    if (pathname === "/api/providers/client" && await hasValidApiKey(request))
+      return NextResponse.next();
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

@@ -34,6 +34,10 @@ const URL_PATTERNS = {
 const MODEL_SYNONYMS = {
   antigravity: {
     "gemini-default": "gemini-3.5-flash-low",
+    "gemini-3.6-flash": "gemini-3.5-flash-low",
+    "gemini-3.6-flash-medium": "gemini-3.5-flash-low",
+    "gemini-3.6-flash-low": "gemini-3.5-flash-extra-low",
+    "gemini-3.6-flash-high": "gemini-3-flash-agent",
     "gemini-3.5-flash-high": "gemini-3-flash-agent",
     "gemini-3.5-flash-medium": "gemini-3.5-flash-low",
     "gemini-3.5-flash-extra-low": "gemini-3.5-flash-extra-low",
