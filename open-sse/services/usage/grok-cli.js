@@ -199,8 +199,11 @@ export function parseGrokCliBilling(billing, user = null) {
       resetAt: periodEnd,
     });
   } else if (Number.isFinite(onDemandCap) && onDemandCap === 0 && Number.isFinite(onDemandUsed)) {
-    if (subscriptionAccess || user?.hasGrokCodeAccess === true || user?.subscriptionTier === "GrokPro" || config?.isUnifiedBillingUser === true) {
-      // Grok Pro / Grok Code personal subscriptions have active usage
+    const isPaidSubscriber = subscriptionAccess || user?.subscriptionTier === "GrokPro" || user?.subscriptionTier === "SuperGrok";
+    const hasActiveUsageMetrics = Number.isFinite(creditUsagePercent) || (Array.isArray(productUsageList) && productUsageList.length > 0);
+
+    if (isPaidSubscriber || hasActiveUsageMetrics) {
+      // Grok Pro / paid subscriptions have active usage
       if (!quotas["Weekly Credit Usage"] && !quotas["GrokBuild Usage"]) {
         quotas["Weekly Allowance"] = makeQuota({
           used: onDemandUsed || 0,
@@ -210,7 +213,7 @@ export function parseGrokCliBilling(billing, user = null) {
         });
       }
     } else {
-      // Cap 0 is the exhausted free/promo state (chat returns 402 spending-limit).
+      // Free / promo tier that has hit spending limit (0 cap, 0 prepaid balance, 402 on chat)
       quotas["On-demand"] = {
         used: 1,
         total: 1,
