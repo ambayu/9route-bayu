@@ -17,7 +17,7 @@ function sanitizeFunctionName(name) {
 }
 
 const MAX_RETRY_AFTER_MS = 10000;
-const MAX_ANTIGRAVITY_OUTPUT_TOKENS = 16384;
+const MAX_ANTIGRAVITY_OUTPUT_TOKENS = 65536;
 
 export class AntigravityExecutor extends BaseExecutor {
   constructor() {
@@ -129,6 +129,20 @@ export class AntigravityExecutor extends BaseExecutor {
 
     if (hasThinkingIntent && !cleanGenConfig.thinkingConfig) {
       cleanGenConfig.thinkingConfig = { thinkingBudget: -1, includeThoughts: true };
+    }
+
+    // Anthropic API requirement: max_tokens MUST be strictly greater than thinking.budget_tokens
+    if (cleanGenConfig.thinkingConfig && typeof cleanGenConfig.thinkingConfig.thinkingBudget === "number") {
+      const budget = cleanGenConfig.thinkingConfig.thinkingBudget;
+      if (budget > 0) {
+        const requiredMaxTokens = budget + 4096;
+        if (!cleanGenConfig.maxOutputTokens || cleanGenConfig.maxOutputTokens <= budget) {
+          cleanGenConfig.maxOutputTokens = Math.min(MAX_ANTIGRAVITY_OUTPUT_TOKENS, Math.max(cleanGenConfig.maxOutputTokens || 0, requiredMaxTokens));
+        }
+        if (cleanGenConfig.thinkingConfig.thinkingBudget >= cleanGenConfig.maxOutputTokens) {
+          cleanGenConfig.thinkingConfig.thinkingBudget = Math.max(1024, cleanGenConfig.maxOutputTokens - 4096);
+        }
+      }
     }
 
     const transformedRequest = {
