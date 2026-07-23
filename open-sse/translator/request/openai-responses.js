@@ -80,8 +80,12 @@ export function openaiResponsesToOpenAIRequest(model, body, stream, credentials)
         ? item.content.map(c => {
           if (c.type === RESPONSES_ITEM.INPUT_TEXT) return { type: OPENAI_BLOCK.TEXT, text: c.text };
           if (c.type === RESPONSES_ITEM.OUTPUT_TEXT) return { type: OPENAI_BLOCK.TEXT, text: c.text };
-          if (c.type === RESPONSES_ITEM.INPUT_IMAGE) {
-            const url = c.image_url || c.file_id || "";
+          if (c.type === RESPONSES_ITEM.INPUT_IMAGE || c.type === OPENAI_BLOCK.IMAGE_URL || c.type === CLAUDE_BLOCK.IMAGE) {
+            let url = typeof c.image_url === "string" ? c.image_url : (c.image_url?.url || c.file_id || c.url || "");
+            if (!url && c.source?.data) {
+              const mime = c.source.media_type || "image/png";
+              url = `data:${mime};base64,${c.source.data}`;
+            }
             return { type: OPENAI_BLOCK.IMAGE_URL, image_url: { url, detail: c.detail || "auto" } };
           }
           return c;

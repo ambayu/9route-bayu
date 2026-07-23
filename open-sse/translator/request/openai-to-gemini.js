@@ -338,6 +338,33 @@ function wrapInCloudCodeEnvelopeForClaude(model, claudeRequest, credentials = nu
         for (const block of msg.content) {
           if (block.type === CLAUDE_BLOCK.TEXT) {
             parts.push({ text: block.text });
+          } else if (block.type === CLAUDE_BLOCK.IMAGE) {
+            const mimeType = block.source?.media_type || "image/png";
+            if (block.source?.type === "base64" || block.source?.data) {
+              parts.push({
+                inlineData: {
+                  mimeType: mimeType,
+                  data: block.source.data
+                }
+              });
+            } else if (block.source?.type === "url" || block.source?.url) {
+              parts.push({
+                fileData: {
+                  mimeType: mimeType,
+                  fileUri: block.source.url
+                }
+              });
+            }
+          } else if (block.type === CLAUDE_BLOCK.DOCUMENT) {
+            if (block.source?.data) {
+              const mimeType = block.source.media_type || "application/pdf";
+              parts.push({
+                inlineData: {
+                  mimeType: mimeType,
+                  data: block.source.data
+                }
+              });
+            }
           } else if (block.type === CLAUDE_BLOCK.TOOL_USE) {
             parts.push({
               thoughtSignature: signature,
