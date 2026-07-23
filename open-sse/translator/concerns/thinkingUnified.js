@@ -48,7 +48,7 @@ export function extractThinking(body) {
   if (!body || typeof body !== "object") return null;
 
   // Claude output_config.effort (explicit) — priority over adaptive thinking
-  const oc = body.output_config?.effort;
+  const oc = body.output_config?.effort || body.request?.output_config?.effort;
   if (typeof oc === "string" && oc) {
     const e = oc.toLowerCase();
     if (e === "none" || e === "off") return { mode: "none" };
@@ -57,7 +57,7 @@ export function extractThinking(body) {
   }
 
   // Claude shape
-  const t = body.thinking;
+  const t = body.thinking || body.request?.thinking;
   if (t && typeof t === "object") {
     if (t.type === "disabled") return { mode: "none" };
     if (t.type === "adaptive" || t.type === "enabled") {
@@ -68,7 +68,7 @@ export function extractThinking(body) {
   }
 
   // OpenAI chat / Responses shape
-  const effort = body.reasoning_effort ?? (typeof body.reasoning === "object" ? body.reasoning?.effort : null);
+  const effort = body.reasoning_effort ?? body.request?.reasoning_effort ?? (typeof body.reasoning === "object" ? body.reasoning?.effort : body.request?.reasoning?.effort);
   if (typeof effort === "string" && effort) {
     const e = effort.toLowerCase();
     if (e === "none" || e === "off") return { mode: "none" };
@@ -89,9 +89,9 @@ export function extractThinking(body) {
   }
 
   // Qwen shape
-  if (body.enable_thinking === false) return { mode: "none" };
-  if (body.enable_thinking === true) {
-    const tb = Number(body.thinking_budget);
+  if (body.enable_thinking === false || body.request?.enable_thinking === false) return { mode: "none" };
+  if (body.enable_thinking === true || body.request?.enable_thinking === true) {
+    const tb = Number(body.thinking_budget || body.request?.thinking_budget);
     if (Number.isFinite(tb) && tb > 0) return { mode: "budget", budget: tb };
     return { mode: "auto" };
   }
@@ -218,8 +218,26 @@ function stripAll(body) {
   delete body.enable_thinking;
   delete body.thinking_budget;
   delete body.output_config;
-  if (body.generationConfig) delete body.generationConfig.thinkingConfig;
-  if (body.request?.generationConfig) delete body.request.generationConfig.thinkingConfig;
+  if (body.generationConfig) {
+    delete body.generationConfig.thinkingConfig;
+    delete body.generationConfig.thinking;
+    delete body.generationConfig.output_config;
+    delete body.generationConfig.reasoning_effort;
+    delete body.generationConfig.reasoning;
+  }
+  if (body.request) {
+    delete body.request.thinking;
+    delete body.request.output_config;
+    delete body.request.reasoning_effort;
+    delete body.request.reasoning;
+    if (body.request.generationConfig) {
+      delete body.request.generationConfig.thinkingConfig;
+      delete body.request.generationConfig.thinking;
+      delete body.request.generationConfig.output_config;
+      delete body.request.generationConfig.reasoning_effort;
+      delete body.request.generationConfig.reasoning;
+    }
+  }
 }
 
 // Apply unified thinking config to body in the resolved provider-native format.

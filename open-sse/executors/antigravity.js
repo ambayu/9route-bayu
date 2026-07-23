@@ -48,8 +48,9 @@ export class AntigravityExecutor extends BaseExecutor {
   transformRequest(model, body, stream, credentials) {
     const projectId = credentials?.projectId || this.generateProjectId();
 
-    // Fix contents for Claude models via Antigravity
-    const contents = body.request?.contents?.map(c => {
+    // 1. Extract and clean contents
+    const rawContents = body.request?.contents || body.contents;
+    const contents = rawContents?.map(c => {
       let role = c.role;
       // functionResponse must be role "user" for Claude models
       if (c.parts?.some(p => p.functionResponse)) {
@@ -60,16 +61,21 @@ export class AntigravityExecutor extends BaseExecutor {
         if (p.thought && !p.functionCall) return false;
         if (p.thoughtSignature && !p.functionCall && !p.text) return false;
         return true;
+      })?.map(p => {
+        // Strip any stray prohibited fields from content parts
+        const { thinking: _pt, output_config: _poc, reasoning_effort: _pre, reasoning: _pr, ...cleanPart } = p;
+        return cleanPart;
       });
+
+      const { thinking: _ct, output_config: _coc, reasoning_effort: _cre, reasoning: _cr, ...cleanC } = c;
       if (role !== c.role || parts?.length !== c.parts?.length) {
-        return { ...c, role, parts };
+        return { ...cleanC, role, parts };
       }
-      return c;
+      return { ...cleanC, parts };
     });
 
-    // Sanitize tool schemas and function names before sending to Antigravity.
-    let tools = body.request?.tools;
-
+    // 2. Sanitize tool schemas and function names
+    let tools = body.request?.tools || body.tools;
     if (tools && tools.length > 0) {
       // Merge all groups into a single functionDeclarations group (Gemini expects 1 group)
       const allDeclarations = tools.flatMap(group =>
@@ -84,41 +90,64 @@ export class AntigravityExecutor extends BaseExecutor {
       tools = allDeclarations.length > 0 ? [{ functionDeclarations: allDeclarations }] : [];
     }
 
-    // Strip tools, toolConfig, AND Claude-native thinking fields from request envelope.
-    // `thinking` and `output_config` must NEVER reach the Gemini Cloud Code endpoint.
+    // 3. Extract and clean request object
+    const rawRequest = body.request || {};
     const {
-      tools: _originalTools,
-      toolConfig: _originalToolConfig,
+      tools: _rTools,
+      toolConfig: _rToolConfig,
       thinking: _rThinking,
       output_config: _rOutputConfig,
-      ...requestWithoutTools
-    } = body.request || {};
-    const generationConfig = { ...(requestWithoutTools.generationConfig || {}) };
-    if (generationConfig.maxOutputTokens > MAX_ANTIGRAVITY_OUTPUT_TOKENS) {
-      generationConfig.maxOutputTokens = MAX_ANTIGRAVITY_OUTPUT_TOKENS;
+      reasoning_effort: _rReasoningEffort,
+      reasoning: _rReasoning,
+      contents: _rContents,
+      generationConfig: rawGenConfig,
+      messages: _rMessages,
+      system: _rSystem,
+      ...cleanRequest
+    } = rawRequest;
+
+    // 4. Extract and clean generationConfig
+    const genConfig = rawGenConfig || body.generationConfig || {};
+    const {
+      thinking: _gThinking,
+      output_config: _gOutputConfig,
+      reasoning_effort: _gReasoningEffort,
+      reasoning: _gReasoning,
+      ...cleanGenConfig
+    } = genConfig;
+
+    if (cleanGenConfig.maxOutputTokens > MAX_ANTIGRAVITY_OUTPUT_TOKENS) {
+      cleanGenConfig.maxOutputTokens = MAX_ANTIGRAVITY_OUTPUT_TOKENS;
+    }
+
+    // Preserve/ensure Gemini thinkingConfig for thinking models if thinking intent was in original request
+    const hasThinkingIntent = !!(
+      body.thinking || body.output_config || body.reasoning_effort ||
+      rawRequest.thinking || rawRequest.output_config || rawRequest.reasoning_effort ||
+      genConfig.thinking || genConfig.output_config || genConfig.reasoning_effort
+    );
+
+    if (hasThinkingIntent && !cleanGenConfig.thinkingConfig) {
+      cleanGenConfig.thinkingConfig = { thinkingBudget: -1, includeThoughts: true };
     }
 
     const transformedRequest = {
-      ...requestWithoutTools,
-      generationConfig,
+      ...cleanRequest,
+      generationConfig: cleanGenConfig,
       ...(contents && { contents }),
       ...(tools && { tools }),
-      sessionId: body.request?.sessionId || resolveSessionId({ headers: credentials?.rawHeaders, body, connectionId: credentials?.email || credentials?.connectionId, scope: "antigravity" }),
+      sessionId: rawRequest.sessionId || body.sessionId || resolveSessionId({ headers: credentials?.rawHeaders, body, connectionId: credentials?.email || credentials?.connectionId, scope: "antigravity" }),
       safetySettings: undefined,
       ...(tools?.length > 0 && { toolConfig: { functionCallingConfig: { mode: "VALIDATED" } } })
     };
-
 
     this._lastSessionId = transformedRequest.sessionId; // cached for buildHeaders (base.execute order)
 
     const resolvedModel = getModelUpstreamId("antigravity", model) || getModelUpstreamId("ag", model) || model;
 
-    // Strip top-level body fields before spread. Claude-native thinking fields
-    // (`thinking`, `output_config`) must NEVER reach the Gemini Cloud Code endpoint.
-    const { thinking: _t, output_config: _oc, ...cleanBody } = body;
-
+    // Return ONLY the strict Google Cloud Code API payload structure.
+    // NEVER spread ...cleanBody at the top level, as extraneous properties cause 400 Bad Request.
     return {
-      ...cleanBody,
       project: projectId,
       model: resolvedModel,
       userAgent: "antigravity",
