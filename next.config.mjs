@@ -11,7 +11,7 @@ const proxyClientMaxBodySize = process.env.NINEROUTER_PROXY_CLIENT_MAX_BODY_SIZE
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  basePath: process.env.NEXT_PUBLIC_BASE_PATH || "",
+  basePath: process.env.NEXT_PUBLIC_BASE_PATH ?? "/route9",
   distDir: process.env.NEXT_DIST_DIR || ".next",
   output: "standalone",
   serverExternalPackages: ["better-sqlite3", "sql.js", "node:sqlite", "bun:sqlite"],
