@@ -145,9 +145,7 @@ export class AntigravityExecutor extends BaseExecutor {
 
     const resolvedModel = getModelUpstreamId("antigravity", model) || getModelUpstreamId("ag", model) || model;
 
-    // Return ONLY the strict Google Cloud Code API payload structure.
-    // NEVER spread ...cleanBody at the top level, as extraneous properties cause 400 Bad Request.
-    return {
+    const finalPayload = {
       project: projectId,
       model: resolvedModel,
       userAgent: "antigravity",
@@ -155,6 +153,9 @@ export class AntigravityExecutor extends BaseExecutor {
       requestId: `agent-${crypto.randomUUID()}`,
       request: transformedRequest
     };
+
+    console.log("ANTIGRAVITY OUTBOUND PAYLOAD:", JSON.stringify(finalPayload));
+    return finalPayload;
   }
 
   async refreshCredentials(credentials, log, proxyOptions = null) {
