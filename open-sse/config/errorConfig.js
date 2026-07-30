@@ -58,6 +58,9 @@ const COOLDOWN = {
  */
 export const ERROR_RULES = [
   // --- Text-based rules (checked first, order = priority) ---
+  { text: "free-usage-exhausted",     cooldownMs: 30 * 60 * 1000 },
+  { text: "usage balance exhausted", cooldownMs: 30 * 60 * 1000 },
+  { text: "used all the included free usage", cooldownMs: 30 * 60 * 1000 },
   { text: "no credentials",           cooldownMs: COOLDOWN.long },
   { text: "request not allowed",      cooldownMs: COOLDOWN.short },
   { text: "improperly formed request", cooldownMs: COOLDOWN.long },
