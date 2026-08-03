@@ -19,25 +19,11 @@ function buildOpenCodeJson({ baseUrl, apiKey, rows }) {
   const modelsMap = {};
   for (const r of safeRows) {
     const m = r?.model?.trim();
-    const slotKey = (r?.slot || r?.label || "")?.trim();
     if (m) {
       modelsMap[m] = {
         name: m,
         modalities: { input: ["text", "image"], output: ["text"] },
       };
-    }
-    if (slotKey) {
-      modelsMap[slotKey] = {
-        name: slotKey,
-        modalities: { input: ["text", "image"], output: ["text"] },
-      };
-      const dashKey = slotKey.replace(/\s+/g, "-");
-      if (dashKey !== slotKey) {
-        modelsMap[dashKey] = {
-          name: slotKey,
-          modalities: { input: ["text", "image"], output: ["text"] },
-        };
-      }
     }
   }
 
