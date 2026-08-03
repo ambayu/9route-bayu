@@ -11,6 +11,10 @@ function getGrokRows(config) {
   return config.tools?.grok?.rows || (config.tool === "grok" ? config.rows : []);
 }
 
+function getOpenCodeRows(config) {
+  return config.tools?.opencode?.rows || (config.tool === "opencode" ? config.rows : []);
+}
+
 function buildGrokToml({ baseUrl, apiKey, rows }) {
   const normalizedBaseUrl = baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`;
   const mainModel = rows.find((row) => row.slot === "default")?.model?.trim();
@@ -94,17 +98,24 @@ function sanitizeConfig(value) {
           newGrokName: String(value.tools.grok?.newGrokName || "").trim(),
           newGrokModel: String(value.tools.grok?.newGrokModel || "").trim(),
         },
+        opencode: {
+          rows: sanitizeRows(value.tools.opencode?.rows),
+          newOpenCodeName: String(value.tools.opencode?.newOpenCodeName || "").trim(),
+          newOpenCodeModel: String(value.tools.opencode?.newOpenCodeModel || "").trim(),
+        },
       }
     : null;
 
   return {
-    tool: value.tool === "grok" ? "grok" : "codex",
+    tool: value.tool === "grok" ? "grok" : value.tool === "opencode" ? "opencode" : "codex",
     baseUrl: String(value.baseUrl || "").trim(),
     apiKey: String(value.apiKey || "").trim(),
     rows,
     ...(tools ? { tools } : {}),
     newGrokName: String(value.newGrokName || "").trim(),
     newGrokModel: String(value.newGrokModel || "").trim(),
+    newOpenCodeName: String(value.newOpenCodeName || "").trim(),
+    newOpenCodeModel: String(value.newOpenCodeModel || "").trim(),
   };
 }
 

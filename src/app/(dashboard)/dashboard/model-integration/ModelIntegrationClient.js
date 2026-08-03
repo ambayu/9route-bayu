@@ -28,6 +28,16 @@ const TOOLS = {
       { slot: "plan", label: "Plan", model: "gpt-5.4-mini" },
     ],
   },
+  opencode: {
+    id: "opencode",
+    label: "OpenCode",
+    icon: "code",
+    configPath: "%USERPROFILE%\\.config\\opencode\\opencode.json",
+    defaults: [
+      { slot: "default", label: "Model utama", model: "gpt-5.5" },
+      { slot: "explorer", label: "Explorer Subagent", model: "gpt-5.4" },
+    ],
+  },
 };
 
 const CODEX_EXTENSION_MODELS = [
@@ -56,6 +66,7 @@ const defaultState = {
 const defaultToolRows = {
   codex: TOOLS.codex.defaults,
   grok: TOOLS.grok.defaults,
+  opencode: TOOLS.opencode.defaults,
 };
 
 const escapeBat = (value) => String(value)
@@ -74,18 +85,19 @@ function getRowsForTool(tool, currentRows) {
     ...row,
     model: currentRows.find((item) => item.slot === row.slot)?.model ?? row.model,
   }));
-  if (tool === "grok") {
+  if (tool === "grok" || tool === "opencode") {
     rows.push(...currentRows.filter((row) => row.custom && !rows.some((item) => item.slot === row.slot)));
   }
   return rows;
 }
 
 function normalizeSavedConfig(savedConfig) {
-  const tool = savedConfig.tool === "grok" ? "grok" : "codex";
+  const tool = savedConfig.tool === "grok" ? "grok" : savedConfig.tool === "opencode" ? "opencode" : "codex";
   const tools = savedConfig.tools || {};
   const codexRows = getRowsForTool("codex", tools.codex?.rows || (tool === "codex" ? savedConfig.rows || [] : []));
   const grokRows = getRowsForTool("grok", tools.grok?.rows || (tool === "grok" ? savedConfig.rows || [] : []));
-  const toolRows = { codex: codexRows, grok: grokRows };
+  const opencodeRows = getRowsForTool("opencode", tools.opencode?.rows || (tool === "opencode" ? savedConfig.rows || [] : []));
+  const toolRows = { codex: codexRows, grok: grokRows, opencode: opencodeRows };
   return {
     config: {
       ...defaultState,
@@ -96,6 +108,8 @@ function normalizeSavedConfig(savedConfig) {
     toolRows,
     newGrokName: tools.grok?.newGrokName || savedConfig.newGrokName || "",
     newGrokModel: tools.grok?.newGrokModel || savedConfig.newGrokModel || "",
+    newOpenCodeName: tools.opencode?.newOpenCodeName || savedConfig.newOpenCodeName || "",
+    newOpenCodeModel: tools.opencode?.newOpenCodeModel || savedConfig.newOpenCodeModel || "",
   };
 }
 
@@ -119,6 +133,11 @@ function mergeSavedConfig(serverConfig, localConfig) {
         ? {
             newGrokName: serverConfig.tools?.grok?.newGrokName || localConfig.tools?.grok?.newGrokName || localConfig.newGrokName || "",
             newGrokModel: serverConfig.tools?.grok?.newGrokModel || localConfig.tools?.grok?.newGrokModel || localConfig.newGrokModel || "",
+          }
+        : tool === "opencode"
+        ? {
+            newOpenCodeName: serverConfig.tools?.opencode?.newOpenCodeName || localConfig.tools?.opencode?.newOpenCodeName || localConfig.newOpenCodeName || "",
+            newOpenCodeModel: serverConfig.tools?.opencode?.newOpenCodeModel || localConfig.tools?.opencode?.newOpenCodeModel || localConfig.newOpenCodeModel || "",
           }
         : {}),
       rows: serverRows || localRows || [],
@@ -210,6 +229,52 @@ function buildGrokToml({ baseUrl, apiKey, rows }) {
   return lines.length > 0 ? lines.join("\n") : "# No Grok Build model mappings selected.\n";
 }
 
+function buildOpenCodeJson({ baseUrl, apiKey, rows }) {
+  const normalizedBaseUrl = baseUrl === "__9ROUTER_BASE_URL__"
+    ? baseUrl
+    : baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`;
+  const defaultRow = rows.find((r) => r.slot === "default") || rows[0];
+  const mainModel = defaultRow?.model?.trim() || "gpt-5.5";
+  const explorerRow = rows.find((r) => r.slot === "explorer") || rows[1] || defaultRow;
+  const explorerModel = explorerRow?.model?.trim() || mainModel;
+
+  const modelsMap = {};
+  for (const r of rows) {
+    const m = r.model?.trim();
+    if (m) {
+      modelsMap[m] = {
+        name: m,
+        modalities: { input: ["text", "image"], output: ["text"] },
+      };
+    }
+  }
+
+  const configObj = {
+    $schema: "https://opencode.ai/config.json",
+    model: `9router/${mainModel}`,
+    provider: {
+      "9router": {
+        npm: "@ai-sdk/openai-compatible",
+        name: "9Router",
+        options: {
+          baseURL: normalizedBaseUrl,
+          apiKey: apiKey || "sk_9router",
+        },
+        models: modelsMap,
+      },
+    },
+    agent: {
+      explorer: {
+        description: "Fast explorer subagent for codebase exploration",
+        mode: "subagent",
+        model: `9router/${explorerModel}`,
+      },
+    },
+  };
+
+  return JSON.stringify(configObj, null, 2);
+}
+
 function buildGrokSyncPs1() {
   return [
     `$DashboardUrl = "__9ROUTER_DASHBOARD_URL__".TrimEnd("/")`,
@@ -263,10 +328,11 @@ function buildBat(config) {
   const toml = config.tool === "codex"
     ? buildCodexToml({ ...config, baseUrl: "__9ROUTER_BASE_URL__" })
     : buildGrokToml({ ...config, baseUrl: "__9ROUTER_BASE_URL__" });
+  const opencodeJson = buildOpenCodeJson({ ...config, baseUrl: "__9ROUTER_BASE_URL__" });
   const codexMapJson = JSON.stringify(
     Object.fromEntries(config.rows.map((row) => [row.slot, row.model])),
     null,
-  2,
+    2,
   );
   const authJson = JSON.stringify({ OPENAI_API_KEY: config.apiKey || "sk_9router", auth_mode: "apikey" }, null, 2);
 
@@ -299,6 +365,31 @@ function buildBat(config) {
       "if exist \"%CONFIG_PATH%\" del /F /Q \"%CONFIG_PATH%\"",
       "if exist \"%MAP_PATH%\" del /F /Q \"%MAP_PATH%\"",
       "echo Codex dikembalikan ke config bawaan. Auth Codex yang sudah ada tidak dihapus.",
+      ":done",
+    ]);
+  }
+
+  if (config.tool === "opencode") {
+    return buildPlainBat([
+      "set \"CONFIG_DIR=%USERPROFILE%\\.config\\opencode\"",
+      "set \"CONFIG_PATH=%CONFIG_DIR%\\opencode.json\"",
+      "if not exist \"%CONFIG_DIR%\" mkdir \"%CONFIG_DIR%\"",
+      "echo Pilih endpoint OpenCode:",
+      "echo 1. 9Router local       http://127.0.0.1:20128/v1",
+      "echo 2. 9Router cloud       https://route9.nurset-studio.web.id/v1",
+      "echo 3. Config bawaan OpenCode",
+      "set /p CHOICE=Pilihan (1/2/3): ",
+      "if \"%CHOICE%\"==\"3\" goto opencode_default",
+      "if \"%CHOICE%\"==\"1\" (set \"BASE_URL=http://127.0.0.1:20128/v1\") else (set \"BASE_URL=https://route9.nurset-studio.web.id/v1\")",
+      ...writeBatchFileBlock("CONFIG_PATH", opencodeJson.replaceAll("__9ROUTER_BASE_URL__", "%BASE_URL%")),
+      `setx OPENAI_API_KEY "${escapeBat(apiKey)}" >nul`,
+      "echo OpenCode config updated at %CONFIG_PATH%",
+      "echo OPENAI_API_KEY set for current user.",
+      "goto done",
+      ":opencode_default",
+      "if exist \"%CONFIG_PATH%\" copy /Y \"%CONFIG_PATH%\" \"%CONFIG_PATH%.bak\" >nul",
+      "if exist \"%CONFIG_PATH%\" del /F /Q \"%CONFIG_PATH%\"",
+      "echo OpenCode dikembalikan ke config bawaan.",
       ":done",
     ]);
   }
@@ -643,6 +734,29 @@ export default function ModelIntegrationClient() {
             </div>
           )}
 
+          {config.tool === "opencode" && (
+            <div className="mt-5 rounded-lg border border-dashed border-border p-3">
+              <div className="grid min-w-0 gap-2 xl:grid-cols-[220px_minmax(0,1fr)_auto] xl:items-end">
+                <Input
+                  label="Nama model OpenCode"
+                  placeholder="contoh: Claude 3.7 Sonnet"
+                  value={newOpenCodeName}
+                  onChange={(event) => { setSaved(false); setNewOpenCodeName(event.target.value); }}
+                />
+                <Input
+                  label="Model 9Router"
+                  placeholder="provider/model-id"
+                  value={newOpenCodeModel}
+                  onChange={(event) => { setSaved(false); setNewOpenCodeModel(event.target.value); }}
+                />
+                <div className="flex gap-2">
+                  <Button className="whitespace-nowrap" variant="secondary" onClick={() => setSelectingSlot("__new_opencode__")}>Select Model</Button>
+                  <Button icon="add" onClick={addOpenCodeModel} disabled={!newOpenCodeName.trim() || !newOpenCodeModel}>Add</Button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="mt-5 flex flex-wrap gap-2">
             <Button icon="save" variant="secondary" onClick={saveConfig} loading={saving}>Simpan</Button>
             <Button icon="download" onClick={downloadScript}>Download .bat</Button>
@@ -660,7 +774,13 @@ export default function ModelIntegrationClient() {
         isOpen={Boolean(selectingSlot)}
         onClose={() => setSelectingSlot(null)}
         onSelect={handleSelectModel}
-        selectedModel={selectingSlot === "__new_grok__" ? newGrokModel : config.rows.find((row) => row.slot === selectingSlot)?.model}
+        selectedModel={
+          selectingSlot === "__new_grok__"
+            ? newGrokModel
+            : selectingSlot === "__new_opencode__"
+            ? newOpenCodeModel
+            : config.rows.find((row) => row.slot === selectingSlot)?.model
+        }
         activeProviders={activeProviders}
         modelAliases={modelAliases}
         title="Select Model"
