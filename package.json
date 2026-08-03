@@ -7,6 +7,7 @@
     "dev": "next dev --port 20127",
     "dev:webpack": "next dev --webpack --port 20127",
     "build": "next build --webpack",
+    "postbuild": "node -e \"const fs = require('fs'); if (fs.existsSync('.next/static')) fs.cpSync('.next/static', '.next/standalone/.next/static', {recursive: true}); if (fs.existsSync('public')) fs.cpSync('public', '.next/standalone/public', {recursive: true});\"",
     "start": "next start --port 20127",
     "dev:bun": "bun --bun next dev --webpack --port 20127",
     "build:bun": "bun --bun next build --webpack",
