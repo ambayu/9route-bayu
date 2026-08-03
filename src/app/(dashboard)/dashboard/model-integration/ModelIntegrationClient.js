@@ -396,7 +396,7 @@ function buildOpenCodeSyncPs1() {
     `while ($true) {`,
     `  try {`,
     `    $EncodedBaseUrl = [System.Uri]::EscapeDataString($BaseUrl)`,
-    `    $Uri = "$DashboardUrl/api/model-integration?tool=opencode&format=json&baseUrl=$EncodedBaseUrl"`,
+    `    $Uri = "$DashboardUrl/api/v1/model-integration/opencode.json?baseUrl=$EncodedBaseUrl"`,
     `    $Json = (Invoke-WebRequest -Uri $Uri -UseBasicParsing -TimeoutSec 20 -Headers @{ Accept = "application/json"; Authorization = "Bearer $ApiKey" }).Content`,
     `    if ($Json -and $Json.Trim().Length -gt 0) {`,
     `      [System.IO.Directory]::CreateDirectory($ConfigDir) | Out-Null`,
