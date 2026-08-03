@@ -69,7 +69,7 @@ const defaultToolRows = {
   opencode: TOOLS.opencode.defaults,
 };
 
-const escapeBat = (value) => String(value)
+const escapeBat = (value) => String(value ?? "")
   .replaceAll("%", "%%")
   .replaceAll("^", "^^")
   .replaceAll("&", "^&")
@@ -80,30 +80,43 @@ const escapeBat = (value) => String(value)
   .replaceAll(")", "^)");
 
 function getRowsForTool(tool, currentRows) {
-  const defaults = TOOLS[tool].defaults;
+  const safeCurrentRows = Array.isArray(currentRows) ? currentRows : [];
+  const toolDef = TOOLS[tool];
+  if (!toolDef) return [];
+  const defaults = toolDef.defaults || [];
   const rows = defaults.map((row) => ({
     ...row,
-    model: currentRows.find((item) => item.slot === row.slot)?.model ?? row.model,
+    model: safeCurrentRows.find((item) => item && item.slot === row.slot)?.model ?? row.model,
   }));
   if (tool === "grok" || tool === "opencode") {
-    rows.push(...currentRows.filter((row) => row.custom && !rows.some((item) => item.slot === row.slot)));
+    rows.push(...safeCurrentRows.filter((row) => row && row.custom && !rows.some((item) => item.slot === row.slot)));
   }
   return rows;
 }
 
 function normalizeSavedConfig(savedConfig) {
+  if (!savedConfig || typeof savedConfig !== "object") {
+    return {
+      config: defaultState,
+      toolRows: defaultToolRows,
+      newGrokName: "",
+      newGrokModel: "",
+      newOpenCodeName: "",
+      newOpenCodeModel: "",
+    };
+  }
   const tool = savedConfig.tool === "grok" ? "grok" : savedConfig.tool === "opencode" ? "opencode" : "codex";
-  const tools = savedConfig.tools || {};
-  const codexRows = getRowsForTool("codex", tools.codex?.rows || (tool === "codex" ? savedConfig.rows || [] : []));
-  const grokRows = getRowsForTool("grok", tools.grok?.rows || (tool === "grok" ? savedConfig.rows || [] : []));
-  const opencodeRows = getRowsForTool("opencode", tools.opencode?.rows || (tool === "opencode" ? savedConfig.rows || [] : []));
+  const tools = savedConfig.tools && typeof savedConfig.tools === "object" ? savedConfig.tools : {};
+  const codexRows = getRowsForTool("codex", tools.codex?.rows || (tool === "codex" ? savedConfig.rows : []));
+  const grokRows = getRowsForTool("grok", tools.grok?.rows || (tool === "grok" ? savedConfig.rows : []));
+  const opencodeRows = getRowsForTool("opencode", tools.opencode?.rows || (tool === "opencode" ? savedConfig.rows : []));
   const toolRows = { codex: codexRows, grok: grokRows, opencode: opencodeRows };
   return {
     config: {
       ...defaultState,
       ...savedConfig,
       tool,
-      rows: toolRows[tool],
+      rows: toolRows[tool] || defaultToolRows[tool] || [],
     },
     toolRows,
     newGrokName: tools.grok?.newGrokName || savedConfig.newGrokName || "",
@@ -114,41 +127,41 @@ function normalizeSavedConfig(savedConfig) {
 }
 
 function mergeSavedConfig(serverConfig, localConfig) {
-  if (!serverConfig) return localConfig;
-  if (!localConfig) return serverConfig;
-
+  if (!serverConfig && !localConfig) return null;
+  const base = serverConfig || localConfig || {};
   const merged = {
-    ...serverConfig,
+    ...base,
     tools: {
-      ...(serverConfig.tools || {}),
+      ...(serverConfig?.tools || localConfig?.tools || {}),
     },
   };
 
   for (const tool of Object.keys(TOOLS)) {
-    const serverRows = serverConfig.tools?.[tool]?.rows || (serverConfig.tool === tool ? serverConfig.rows : null);
-    const localRows = localConfig.tools?.[tool]?.rows || (localConfig.tool === tool ? localConfig.rows : null);
+    const serverRows = serverConfig?.tools?.[tool]?.rows || (serverConfig?.tool === tool ? serverConfig?.rows : null);
+    const localRows = localConfig?.tools?.[tool]?.rows || (localConfig?.tool === tool ? localConfig?.rows : null);
     merged.tools[tool] = {
-      ...(serverConfig.tools?.[tool] || {}),
+      ...(serverConfig?.tools?.[tool] || localConfig?.tools?.[tool] || {}),
       ...(tool === "grok"
         ? {
-            newGrokName: serverConfig.tools?.grok?.newGrokName || localConfig.tools?.grok?.newGrokName || localConfig.newGrokName || "",
-            newGrokModel: serverConfig.tools?.grok?.newGrokModel || localConfig.tools?.grok?.newGrokModel || localConfig.newGrokModel || "",
+            newGrokName: serverConfig?.tools?.grok?.newGrokName || localConfig?.tools?.grok?.newGrokName || localConfig?.newGrokName || "",
+            newGrokModel: serverConfig?.tools?.grok?.newGrokModel || localConfig?.tools?.grok?.newGrokModel || localConfig?.newGrokModel || "",
           }
         : tool === "opencode"
         ? {
-            newOpenCodeName: serverConfig.tools?.opencode?.newOpenCodeName || localConfig.tools?.opencode?.newOpenCodeName || localConfig.newOpenCodeName || "",
-            newOpenCodeModel: serverConfig.tools?.opencode?.newOpenCodeModel || localConfig.tools?.opencode?.newOpenCodeModel || localConfig.newOpenCodeModel || "",
+            newOpenCodeName: serverConfig?.tools?.opencode?.newOpenCodeName || localConfig?.tools?.opencode?.newOpenCodeName || localConfig?.newOpenCodeName || "",
+            newOpenCodeModel: serverConfig?.tools?.opencode?.newOpenCodeModel || localConfig?.tools?.opencode?.newOpenCodeModel || localConfig?.newOpenCodeModel || "",
           }
         : {}),
-      rows: serverRows || localRows || [],
+      rows: Array.isArray(serverRows) ? serverRows : Array.isArray(localRows) ? localRows : [],
     };
   }
 
   return merged;
 }
 
-function buildCodexToml({ baseUrl, rows }) {
-  const mainModel = rows.find((row) => row.slot === "gpt-5.5")?.model || "gemini-3.6";
+function buildCodexToml({ baseUrl = "", rows = [] }) {
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const mainModel = safeRows.find((row) => row && row.slot === "gpt-5.5")?.model || "gemini-3.6";
   const normalizedBaseUrl = baseUrl === "__9ROUTER_BASE_URL__"
     ? baseUrl
     : baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`;
@@ -160,7 +173,6 @@ function buildCodexToml({ baseUrl, rows }) {
     `name = "9Router"`,
     `base_url = ${JSON.stringify(normalizedBaseUrl)}`,
     `wire_api = "responses"`,
-    // Codex custom providers send Authorization from this env var (not only auth.json).
     `env_key = "OPENAI_API_KEY"`,
     "",
     `[agents.subagent]`,
@@ -168,7 +180,7 @@ function buildCodexToml({ baseUrl, rows }) {
     "",
     `# 9Router Codex model mapping`,
     `# File lengkap mapping juga dibuat di 9router-model-map.json oleh script .bat.`,
-    ...rows.flatMap((row) => [
+    ...safeRows.flatMap((row) => [
       `[profiles.${JSON.stringify(row.slot)}]`,
       `model = ${JSON.stringify(row.model)}`,
       `model_provider = "9router"`,
@@ -178,11 +190,11 @@ function buildCodexToml({ baseUrl, rows }) {
   ].join("\n");
 }
 
-/** Write UTF-8 without BOM — Windows PowerShell 5 `Set-Content -Encoding UTF8` adds BOM and breaks Codex parsers. */
-function buildGrokToml({ baseUrl, apiKey, rows }) {
+function buildGrokToml({ baseUrl = "", apiKey = "", rows = [] }) {
+  const safeRows = Array.isArray(rows) ? rows : [];
   const normalizedBaseUrl = baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`;
-  const mainModel = rows.find((row) => row.slot === "default")?.model?.trim();
-  const subRows = rows.filter((row) => row.slot !== "default" && row.model?.trim());
+  const mainModel = safeRows.find((row) => row && row.slot === "default")?.model?.trim();
+  const subRows = safeRows.filter((row) => row && row.slot !== "default" && row.model?.trim());
   const defaultSlot = mainModel ? "9router" : subRows[0] ? `9router-${subRows[0].slot}` : "";
   const lines = [];
 
@@ -229,18 +241,19 @@ function buildGrokToml({ baseUrl, apiKey, rows }) {
   return lines.length > 0 ? lines.join("\n") : "# No Grok Build model mappings selected.\n";
 }
 
-function buildOpenCodeJson({ baseUrl, apiKey, rows }) {
+function buildOpenCodeJson({ baseUrl = "", apiKey = "", rows = [] }) {
+  const safeRows = Array.isArray(rows) ? rows : [];
   const normalizedBaseUrl = baseUrl === "__9ROUTER_BASE_URL__"
     ? baseUrl
     : baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`;
-  const defaultRow = rows.find((r) => r.slot === "default") || rows[0];
+  const defaultRow = safeRows.find((r) => r && r.slot === "default") || safeRows[0];
   const mainModel = defaultRow?.model?.trim() || "gpt-5.5";
-  const explorerRow = rows.find((r) => r.slot === "explorer") || rows[1] || defaultRow;
+  const explorerRow = safeRows.find((r) => r && r.slot === "explorer") || safeRows[1] || defaultRow;
   const explorerModel = explorerRow?.model?.trim() || mainModel;
 
   const modelsMap = {};
-  for (const r of rows) {
-    const m = r.model?.trim();
+  for (const r of safeRows) {
+    const m = r?.model?.trim();
     if (m) {
       modelsMap[m] = {
         name: m,
@@ -302,7 +315,7 @@ function buildGrokSyncPs1() {
 function writeBatchFileBlock(targetVar, content) {
   return [
     `> "%${targetVar}%" (`,
-    ...content.split("\n").map((line) => {
+    ...(content || "").split("\n").map((line) => {
       if (!line) return "  echo.";
       return `  echo ${escapeBat(line)
         .replaceAll("%%BASE_URL%%", "%BASE_URL%")
@@ -324,21 +337,24 @@ function buildPlainBat(lines) {
 }
 
 function buildBat(config) {
-  const tool = TOOLS[config.tool];
-  const toml = config.tool === "codex"
-    ? buildCodexToml({ ...config, baseUrl: "__9ROUTER_BASE_URL__" })
-    : buildGrokToml({ ...config, baseUrl: "__9ROUTER_BASE_URL__" });
-  const opencodeJson = buildOpenCodeJson({ ...config, baseUrl: "__9ROUTER_BASE_URL__" });
+  if (!config || typeof config !== "object") return "";
+  const toolId = config.tool && TOOLS[config.tool] ? config.tool : "codex";
+  const rows = Array.isArray(config.rows) ? config.rows : [];
+  const safeConfig = { ...config, tool: toolId, rows };
+
+  const toml = toolId === "codex"
+    ? buildCodexToml({ ...safeConfig, baseUrl: "__9ROUTER_BASE_URL__" })
+    : buildGrokToml({ ...safeConfig, baseUrl: "__9ROUTER_BASE_URL__" });
+  const opencodeJson = buildOpenCodeJson({ ...safeConfig, baseUrl: "__9ROUTER_BASE_URL__" });
   const codexMapJson = JSON.stringify(
-    Object.fromEntries(config.rows.map((row) => [row.slot, row.model])),
+    Object.fromEntries(rows.map((row) => [row?.slot || "", row?.model || ""])),
     null,
     2,
   );
   const authJson = JSON.stringify({ OPENAI_API_KEY: config.apiKey || "sk_9router", auth_mode: "apikey" }, null, 2);
-
   const apiKey = config.apiKey || "sk_9router";
 
-  if (config.tool === "codex") {
+  if (toolId === "codex") {
     return buildPlainBat([
       "set \"CONFIG_DIR=%USERPROFILE%\\.codex\"",
       "set \"CONFIG_PATH=%CONFIG_DIR%\\config.toml\"",
@@ -369,7 +385,7 @@ function buildBat(config) {
     ]);
   }
 
-  if (config.tool === "opencode") {
+  if (toolId === "opencode") {
     return buildPlainBat([
       "set \"CONFIG_DIR=%USERPROFILE%\\.config\\opencode\"",
       "set \"CONFIG_PATH=%CONFIG_DIR%\\opencode.json\"",
@@ -451,34 +467,42 @@ export default function ModelIntegrationClient() {
     const loadSavedConfig = async () => {
       let localConfig = null;
       try {
-        localConfig = JSON.parse(localStorage.getItem(STORAGE_KEY));
-      } catch { /* ignore invalid saved config */ }
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) localConfig = JSON.parse(raw);
+      } catch {
+        try { localStorage.removeItem(STORAGE_KEY); } catch {}
+      }
 
       try {
         const response = await fetch("/api/model-integration", { cache: "no-store" });
         const data = response.ok ? await response.json() : {};
-        const savedConfig = mergeSavedConfig(data.config, localConfig);
-        if (!mounted || !savedConfig?.tool) return;
-        const normalized = normalizeSavedConfig(savedConfig);
+        const savedConfig = mergeSavedConfig(data?.config, localConfig);
+        const normalized = normalizeSavedConfig(savedConfig || localConfig || defaultState);
+        if (!mounted) return;
         setConfig(normalized.config);
         setToolRows(normalized.toolRows);
         setNewGrokName(normalized.newGrokName);
         setNewGrokModel(normalized.newGrokModel);
+        setNewOpenCodeName(normalized.newOpenCodeName);
+        setNewOpenCodeModel(normalized.newOpenCodeModel);
 
-        if (localConfig && (!data.config || !data.config.tools)) {
+        if (localConfig && (!data?.config || !data?.config?.tools)) {
           fetch("/api/model-integration", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ config: savedConfig }),
+            body: JSON.stringify({ config: normalized.config }),
           }).catch(() => {});
         }
-      } catch {
-        if (!mounted || !localConfig?.tool) return;
-        const normalized = normalizeSavedConfig(localConfig);
+      } catch (error) {
+        console.warn("Unable to load model-integration config:", error);
+        if (!mounted) return;
+        const normalized = normalizeSavedConfig(localConfig || defaultState);
         setConfig(normalized.config);
         setToolRows(normalized.toolRows);
         setNewGrokName(normalized.newGrokName);
         setNewGrokModel(normalized.newGrokModel);
+        setNewOpenCodeName(normalized.newOpenCodeName);
+        setNewOpenCodeModel(normalized.newOpenCodeModel);
       }
     };
     loadSavedConfig();
@@ -493,8 +517,8 @@ export default function ModelIntegrationClient() {
     ])
       .then(([providersData, aliasesData]) => {
         if (!mounted) return;
-        setActiveProviders((providersData.connections || []).filter((connection) => connection.isActive !== false));
-        setModelAliases(aliasesData.aliases || aliasesData || {});
+        setActiveProviders((providersData?.connections || []).filter((connection) => connection && connection.isActive !== false));
+        setModelAliases(aliasesData?.aliases || aliasesData || {});
       })
       .catch(() => {
         if (!mounted) return;
@@ -506,27 +530,33 @@ export default function ModelIntegrationClient() {
 
   const script = useMemo(() => buildBat(config), [config]);
 
-  const updateTool = (tool) => {
+  const updateTool = (toolId) => {
     setSaved(false);
-    setConfig((current) => {
-      const nextToolRows = {
-        ...toolRows,
-        [current.tool]: getRowsForTool(current.tool, current.rows),
-      };
-      setToolRows(nextToolRows);
-      return { ...current, tool, rows: getRowsForTool(tool, nextToolRows[tool] || []) };
-    });
+    const validTool = TOOLS[toolId] ? toolId : "codex";
+    const currentToolRows = getRowsForTool(config.tool, config.rows);
+    const updatedToolRows = {
+      ...toolRows,
+      [config.tool]: currentToolRows,
+    };
+    const nextRows = getRowsForTool(validTool, updatedToolRows[validTool] || []);
+    setToolRows(updatedToolRows);
+    setConfig((current) => ({
+      ...current,
+      tool: validTool,
+      rows: nextRows,
+    }));
   };
 
   const updateRow = (slot, model) => {
     setSaved(false);
+    const updatedRows = (config.rows || []).map((row) => row.slot === slot ? { ...row, model } : row);
     setConfig((current) => ({
       ...current,
-      rows: current.rows.map((row) => row.slot === slot ? { ...row, model } : row),
+      rows: updatedRows,
     }));
     setToolRows((current) => ({
       ...current,
-      [config.tool]: getRowsForTool(config.tool, (current[config.tool] || config.rows).map((row) => row.slot === slot ? { ...row, model } : row)),
+      [config.tool]: getRowsForTool(config.tool, updatedRows),
     }));
   };
 
@@ -553,26 +583,21 @@ export default function ModelIntegrationClient() {
     const slot = name.toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
     if (!slot) return;
     setSaved(false);
-    setConfig((current) => ({
-      ...current,
-      rows: current.rows.some((row) => row.slot === slot)
-        ? current.rows.map((row) => row.slot === slot ? { ...row, label: name, model: newGrokModel, custom: true } : row)
-        : [...current.rows, { slot, label: name, model: newGrokModel, custom: true }],
-    }));
-    setToolRows((current) => ({
-      ...current,
-      grok: current.grok.some((row) => row.slot === slot)
-        ? current.grok.map((row) => row.slot === slot ? { ...row, label: name, model: newGrokModel, custom: true } : row)
-        : [...current.grok, { slot, label: name, model: newGrokModel, custom: true }],
-    }));
+    const existing = config.rows || [];
+    const updatedRows = existing.some((row) => row.slot === slot)
+      ? existing.map((row) => row.slot === slot ? { ...row, label: name, model: newGrokModel, custom: true } : row)
+      : [...existing, { slot, label: name, model: newGrokModel, custom: true }];
+    setConfig((current) => ({ ...current, rows: updatedRows }));
+    setToolRows((current) => ({ ...current, grok: updatedRows }));
     setNewGrokName("");
     setNewGrokModel("");
   };
 
   const removeGrokModel = (slot) => {
     setSaved(false);
-    setConfig((current) => ({ ...current, rows: current.rows.filter((row) => row.slot !== slot) }));
-    setToolRows((current) => ({ ...current, grok: current.grok.filter((row) => row.slot !== slot) }));
+    const updatedRows = (config.rows || []).filter((row) => row.slot !== slot);
+    setConfig((current) => ({ ...current, rows: updatedRows }));
+    setToolRows((current) => ({ ...current, grok: updatedRows }));
   };
 
   const addOpenCodeModel = () => {
@@ -581,32 +606,28 @@ export default function ModelIntegrationClient() {
     const slot = name.toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
     if (!slot) return;
     setSaved(false);
-    setConfig((current) => ({
-      ...current,
-      rows: current.rows.some((row) => row.slot === slot)
-        ? current.rows.map((row) => row.slot === slot ? { ...row, label: name, model: newOpenCodeModel, custom: true } : row)
-        : [...current.rows, { slot, label: name, model: newOpenCodeModel, custom: true }],
-    }));
-    setToolRows((current) => ({
-      ...current,
-      opencode: (current.opencode || []).some((row) => row.slot === slot)
-        ? (current.opencode || []).map((row) => row.slot === slot ? { ...row, label: name, model: newOpenCodeModel, custom: true } : row)
-        : [...(current.opencode || []), { slot, label: name, model: newOpenCodeModel, custom: true }],
-    }));
+    const existing = config.rows || [];
+    const updatedRows = existing.some((row) => row.slot === slot)
+      ? existing.map((row) => row.slot === slot ? { ...row, label: name, model: newOpenCodeModel, custom: true } : row)
+      : [...existing, { slot, label: name, model: newOpenCodeModel, custom: true }];
+    setConfig((current) => ({ ...current, rows: updatedRows }));
+    setToolRows((current) => ({ ...current, opencode: updatedRows }));
     setNewOpenCodeName("");
     setNewOpenCodeModel("");
   };
 
   const removeOpenCodeModel = (slot) => {
     setSaved(false);
-    setConfig((current) => ({ ...current, rows: current.rows.filter((row) => row.slot !== slot) }));
-    setToolRows((current) => ({ ...current, opencode: (current.opencode || []).filter((row) => row.slot !== slot) }));
+    const updatedRows = (config.rows || []).filter((row) => row.slot !== slot);
+    setConfig((current) => ({ ...current, rows: updatedRows }));
+    setToolRows((current) => ({ ...current, opencode: updatedRows }));
   };
 
   const saveConfig = async () => {
+    const currentToolRows = getRowsForTool(config.tool, config.rows);
     const nextToolRows = {
       ...toolRows,
-      [config.tool]: getRowsForTool(config.tool, config.rows),
+      [config.tool]: currentToolRows,
     };
     setToolRows(nextToolRows);
     const payload = {
@@ -631,11 +652,11 @@ export default function ModelIntegrationClient() {
         body: JSON.stringify({ config: payload }),
       });
       if (!response.ok) throw new Error("Save failed");
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(payload)); } catch {}
       setSaved(true);
       return true;
     } catch {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(payload)); } catch {}
       setSaveError("Tersimpan di browser, gagal simpan ke database.");
       setSaved(false);
       return false;
@@ -656,6 +677,8 @@ export default function ModelIntegrationClient() {
     link.remove();
     URL.revokeObjectURL(url);
   };
+
+  const safeRows = Array.isArray(config.rows) ? config.rows : [];
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-3 sm:px-4 lg:px-0">
@@ -690,12 +713,12 @@ export default function ModelIntegrationClient() {
           <div className="grid min-w-0 gap-4 md:grid-cols-2">
             <Input
               label="Base URL"
-              value={config.baseUrl}
+              value={config.baseUrl || ""}
               onChange={(event) => { setSaved(false); setConfig((current) => ({ ...current, baseUrl: event.target.value })); }}
             />
             <Input
               label="API Key"
-              value={config.apiKey}
+              value={config.apiKey || ""}
               onChange={(event) => { setSaved(false); setConfig((current) => ({ ...current, apiKey: event.target.value })); }}
             />
           </div>
@@ -707,7 +730,7 @@ export default function ModelIntegrationClient() {
                 <span>Dipakai sebagai model</span>
               </div>
             )}
-            {config.rows.map((row) => (
+            {safeRows.map((row) => (
               <div key={row.slot} className="grid min-w-0 gap-2 lg:grid-cols-[210px_minmax(0,1fr)] lg:items-center">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-text-main">{row.label}</p>
@@ -716,7 +739,7 @@ export default function ModelIntegrationClient() {
                 {config.tool === "codex" ? (
                   <div className="grid min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
                     <input
-                      value={row.model}
+                      value={row.model || ""}
                       onChange={(event) => updateRow(row.slot, event.target.value)}
                       placeholder="provider/model-id"
                       className="h-10 w-full rounded-[10px] border border-border bg-surface-2 px-3 text-sm text-text-main focus:border-brand-500/40 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
@@ -726,7 +749,7 @@ export default function ModelIntegrationClient() {
                 ) : row.custom ? (
                   <div className="grid min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_auto_auto]">
                     <input
-                      value={row.model}
+                      value={row.model || ""}
                       onChange={(event) => updateRow(row.slot, event.target.value)}
                       placeholder="provider/model-id"
                       className="h-10 w-full rounded-[10px] border border-border bg-surface-2 px-3 text-sm text-text-main focus:border-brand-500/40 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
@@ -737,7 +760,7 @@ export default function ModelIntegrationClient() {
                 ) : (
                   <div className="grid min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
                     <input
-                      value={row.model}
+                      value={row.model || ""}
                       onChange={(event) => updateRow(row.slot, event.target.value)}
                       placeholder="provider/model-id"
                       className="h-10 w-full rounded-[10px] border border-border bg-surface-2 px-3 text-sm text-text-main focus:border-brand-500/40 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
@@ -817,7 +840,7 @@ export default function ModelIntegrationClient() {
             ? newGrokModel
             : selectingSlot === "__new_opencode__"
             ? newOpenCodeModel
-            : config.rows.find((row) => row.slot === selectingSlot)?.model
+            : safeRows.find((row) => row.slot === selectingSlot)?.model
         }
         activeProviders={activeProviders}
         modelAliases={modelAliases}
