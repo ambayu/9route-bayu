@@ -409,6 +409,21 @@ function buildOpenCodeSyncPs1() {
   ].join("\n");
 }
 
+function buildOpenCodeFetchCommand() {
+  return [
+    "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command",
+    "\"$ErrorActionPreference='Stop';",
+    "$ConfigPath=$env:CONFIG_PATH;",
+    "$BaseUrl=$env:BASE_URL;",
+    "$DashboardUrl=$env:DASHBOARD_URL.TrimEnd('/');",
+    "$EncodedBaseUrl=[System.Uri]::EscapeDataString($BaseUrl);",
+    "$Uri=\\\"$DashboardUrl/api/v1/model-integration/opencode.json?baseUrl=$EncodedBaseUrl\\\";",
+    "$Json=(Invoke-WebRequest -Uri $Uri -UseBasicParsing -TimeoutSec 20 -Headers @{ Accept='application/json' }).Content;",
+    "[System.IO.Directory]::CreateDirectory((Split-Path $ConfigPath)) | Out-Null;",
+    "[System.IO.File]::WriteAllText($ConfigPath,$Json,[System.Text.UTF8Encoding]::new($false))\"",
+  ].join(" ");
+}
+
   if (toolId === "opencode") {
     return buildPlainBat([
       "set \"CONFIG_DIR=%USERPROFILE%\\.config\\opencode\"",
@@ -429,7 +444,7 @@ function buildOpenCodeSyncPs1() {
       "  set \"BASE_URL=https://route9.nurset-studio.web.id/v1\"",
       "  set \"DASHBOARD_URL=https://route9.nurset-studio.web.id\"",
       ")",
-      ...writeBatchFileBlock("CONFIG_PATH", opencodeJson.replaceAll("__9ROUTER_BASE_URL__", "%BASE_URL%")),
+      buildOpenCodeFetchCommand(),
       ...writeBatchFileBlock("SYNC_PATH", buildOpenCodeSyncPs1()
         .replaceAll("__9ROUTER_BASE_URL__", "%BASE_URL%")
         .replaceAll("__9ROUTER_DASHBOARD_URL__", "%DASHBOARD_URL%")
