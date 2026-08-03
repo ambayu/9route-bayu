@@ -34,7 +34,7 @@ export default function RootLayout({ children }) {
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `if(document.fonts&&document.fonts.ready){document.fonts.ready.then(function(){document.documentElement.classList.add('fonts-loaded')})}else{document.documentElement.classList.add('fonts-loaded')}`,
+            __html: `if(document.fonts&&document.fonts.ready){document.fonts.ready.then(function(){document.documentElement.classList.add('fonts-loaded')})}else{document.documentElement.classList.add('fonts-loaded')};window.addEventListener('error',function(e){var m=(e&&e.message)||'';if(m.indexOf('ChunkLoadError')!==-1||m.indexOf('Loading chunk')!==-1){var l=sessionStorage.getItem('9r_chunk_reload')||0;if(Date.now()-l>15000){sessionStorage.setItem('9r_chunk_reload',Date.now());window.location.reload()}}},true);window.addEventListener('unhandledrejection',function(e){var r=(e&&e.reason)||{};var m=r.message||String(r||'');if(m.indexOf('ChunkLoadError')!==-1||m.indexOf('Loading chunk')!==-1){var l=sessionStorage.getItem('9r_chunk_reload')||0;if(Date.now()-l>15000){sessionStorage.setItem('9r_chunk_reload',Date.now());window.location.reload()}}});`,
           }}
         />
       </head>
