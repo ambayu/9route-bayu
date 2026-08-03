@@ -30,6 +30,8 @@ export {
   deleteCustomModel,
   getMitmAlias,
   setMitmAliasAll,
+  getModelIntegrationConfig,
+  setModelIntegrationConfig,
   getApiKeys,
   createApiKey,
   deleteApiKey,

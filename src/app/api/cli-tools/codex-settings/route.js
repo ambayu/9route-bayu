@@ -1,12 +1,24 @@
-"use server";
 
 import { NextResponse } from "next/server";
 import { exec } from "child_process";
 import { promisify } from "util";
+import { getApiKeys } from "@/lib/localDb";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
 import { parseTOML, stringifyTOML } from "confbox";
+import { getModelAliases } from "@/lib/localDb";
+
+const CODEX_ALIAS_KEYS = [
+  "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
+  "5.6-sol", "5.6-terra", "5.6-luna",
+  "gpt-5.6", "5.6",
+  "gpt-5.5", "5.5",
+  "gpt-5.4", "5.4",
+  "gpt-5.4-mini", "5.4-mini",
+  "gpt-5.3-codex", "gpt-5.3", "5.3",
+  "gpt-5.2", "5.2"
+];
 
 const execAsync = promisify(exec);
 
@@ -53,10 +65,16 @@ const checkCodexInstalled = async () => {
     return true;
   } catch {
     try {
-      await fs.access(getCodexConfigPath());
+      await fs.mkdir(getCodexDir(), { recursive: true });
+      const configPath = getCodexConfigPath();
+      try {
+        await fs.access(configPath);
+      } catch {
+        await fs.writeFile(configPath, 'model_provider = "9router"\nmodel = "gpt-5.6-sol"\n\n[model_providers.9router]\nbase_url = "http://127.0.0.1:20128/v1"\nwire_version = "v1"\n');
+      }
       return true;
     } catch {
-      return false;
+      return true;
     }
   }
 };
@@ -80,24 +98,161 @@ const has9RouterConfig = (config) => {
 };
 
 // GET - Check codex CLI and read current settings
-export async function GET() {
+export async function GET(request) {
   try {
-    const isInstalled = await checkCodexInstalled();
-    
-    if (!isInstalled) {
-      return NextResponse.json({
-        installed: false,
-        config: null,
-        message: "Codex CLI is not installed",
+    const url = request ? new URL(request.url) : null;
+    const action = url ? url.searchParams.get("action") : null;
+
+    if (action === "download-switcher" && request) {
+      const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || "localhost:20127";
+      let proto = request.headers.get("x-forwarded-proto") || "http";
+      if (host.includes("umnaw.ac.id") || host.endsWith(":443")) proto = "https";
+      const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+      const vpsUrl = `${proto}://${host}${basePath}/v1`;
+
+      // Fetch first active API key from DB
+      let vpsApiKey = "sk_9router";
+      try {
+        const apiKeys = await getApiKeys();
+        const activeKey = apiKeys.find(k => k.isActive);
+        if (activeKey?.key) vpsApiKey = activeKey.key;
+      } catch { /* fallback */ }
+
+      // Build PowerShell script (Grok-style menu)
+      const lines = [
+        `$configPath = Join-Path $env:USERPROFILE '.codex\\config.toml'`,
+        `$authPath   = Join-Path $env:USERPROFILE '.codex\\auth.json'`,
+        ``,
+        `if (-not (Test-Path (Split-Path $configPath))) {`,
+        `    New-Item -ItemType Directory -Force -Path (Split-Path $configPath) | Out-Null`,
+        `}`,
+        ``,
+        `Write-Host ""`,
+        `Write-Host "==================================================" -ForegroundColor Cyan`,
+        `Write-Host "       Codex Endpoint Switcher (9Router)" -ForegroundColor Cyan`,
+        `Write-Host "==================================================" -ForegroundColor Cyan`,
+        `Write-Host ""`,
+        `Write-Host "Pilih server yang ingin digunakan untuk Codex:" -ForegroundColor White`,
+        `Write-Host ""`,
+        `Write-Host "  [1] Local 9Router    (http://localhost:20127/v1)" -ForegroundColor Green`,
+        `Write-Host "  [2] Remote 9Router   (${vpsUrl})" -ForegroundColor Yellow`,
+        `Write-Host "  [3] Default Codex    (kembalikan ke konfigurasi resmi)" -ForegroundColor Magenta`,
+        `Write-Host ""`,
+        `Write-Host "==================================================" -ForegroundColor Cyan`,
+        `Write-Host ""`,
+        `$choice = Read-Host "Masukkan pilihan (1, 2, atau 3)"`,
+        ``,
+        `if ($choice -eq '1') {`,
+        `    $newUrl      = "http://localhost:20127/v1"`,
+        `    $label       = "Local 9Router"`,
+        `    $apiKeyToSet = "sk_9router"`,
+        `} elseif ($choice -eq '2') {`,
+        `    $newUrl      = "${vpsUrl}"`,
+        `    $label       = "Remote 9Router"`,
+        `    $apiKeyToSet = "${vpsApiKey}"`,
+        `} elseif ($choice -eq '3') {`,
+        `    Write-Host ""`,
+        `    Write-Host "Mengembalikan ke konfigurasi default Codex..." -ForegroundColor Yellow`,
+        `    if (Test-Path $configPath) {`,
+        `        $c = Get-Content $configPath -Raw`,
+        `        if ($null -ne $c) {`,
+        `            $c = $c -replace 'model_provider\\s*=\\s*"9router"\\s*\\r?\\n?', ''`,
+        `            $c = $c -replace '(?s)\\[model_providers\\.9router\\].*?(?=\\r?\\n\\[|\\Z)', ''`,
+        `            $c = $c -replace '(?s)\\[agents\\.subagent\\].*?(?=\\r?\\n\\[|\\Z)', ''`,
+        `            $c = $c -replace '(?s)\\[profiles\\."[^"]*"\\].*?(?=\\r?\\n\\[|\\Z)', ''`,
+        `            Set-Content $configPath $c.Trim()`,
+        `            Write-Host "config.toml dikembalikan ke default." -ForegroundColor Green`,
+        `        }`,
+        `    } else {`,
+        `        Write-Host "Tidak ada config.toml — tidak ada yang diubah." -ForegroundColor Gray`,
+        `    }`,
+        `    if (Test-Path $authPath) {`,
+        `        try {`,
+        `            $j = Get-Content $authPath -Raw | ConvertFrom-Json`,
+        `            $j.PSObject.Properties.Remove('OPENAI_API_KEY')`,
+        `            $j.PSObject.Properties.Remove('auth_mode')`,
+        `            if (($j | Get-Member -MemberType NoteProperty).Count -eq 0) {`,
+        `                Remove-Item $authPath -Force`,
+        `                Write-Host "auth.json dihapus." -ForegroundColor Green`,
+        `            } else {`,
+        `                $j | ConvertTo-Json -Depth 5 | Set-Content $authPath`,
+        `                Write-Host "auth.json diperbarui." -ForegroundColor Green`,
+        `            }`,
+        `        } catch { Write-Host "Gagal update auth.json: $_" -ForegroundColor Red }`,
+        `    }`,
+        `    Stop-Process -Name codex -Force -ErrorAction SilentlyContinue`,
+        `    Stop-Process -Name codex-agent -Force -ErrorAction SilentlyContinue`,
+        `    Write-Host ""`,
+        `    Write-Host "[SELESAI] Codex dikembalikan ke konfigurasi default." -ForegroundColor Green`,
+        `    Write-Host ""`,
+        `    Pause; Exit`,
+        `} else {`,
+        `    Write-Host "Pilihan tidak valid. Keluar." -ForegroundColor Red`,
+        `    Pause; Exit`,
+        `}`,
+        ``,
+        `# Terapkan pilihan 1 atau 2`,
+        `if (-not (Test-Path $configPath)) { New-Item -Path $configPath -ItemType File -Force | Out-Null }`,
+        `$c = Get-Content $configPath -Raw`,
+        `if ($null -eq $c) { $c = '' }`,
+        ``,
+        `if ($c -notlike '*model_provider = "9router"*') {`,
+        `    $c = "model_provider = \`"9router\`"\`r\`n" + $c`,
+        `}`,
+        `if ($c -match '(?m)^model\\s*=') {`,
+        `    $c = $c -replace '(?m)^model\\s*=.*', 'model = "gpt-5.5"'`,
+        `} else {`,
+        `    $c = "model = \`"gpt-5.5\`"\`r\`n" + $c`,
+        `}`,
+        `$c = $c -replace '(?s)\\[model_providers\\.9router\\].*?(?=\\r?\\n\\[|\\Z)', ''`,
+        `$c = $c.Trim()`,
+        `$c += "\`r\`n\`r\`n[model_providers.9router]\`r\`nname = \`"9Router\`"\`r\`nbase_url = \`"$newUrl\`"\`r\`nwire_api = \`"responses\`"\`r\`n"`,
+        `Set-Content $configPath $c`,
+        ``,
+        `@{ OPENAI_API_KEY = $apiKeyToSet; auth_mode = "apikey" } | ConvertTo-Json -Depth 3 | Set-Content $authPath`,
+        ``,
+        `Write-Host "Merestart Codex..." -ForegroundColor Yellow`,
+        `Stop-Process -Name codex -Force -ErrorAction SilentlyContinue`,
+        `Stop-Process -Name codex-agent -Force -ErrorAction SilentlyContinue`,
+        ``,
+        `Write-Host ""`,
+        `Write-Host "==================================================" -ForegroundColor Cyan`,
+        `Write-Host "[SUKSES] Codex dikonfigurasi!" -ForegroundColor Green`,
+        `Write-Host "  Server   : $label" -ForegroundColor Green`,
+        `Write-Host "  Endpoint : $newUrl" -ForegroundColor Green`,
+        `Write-Host "  API Key  : $apiKeyToSet" -ForegroundColor Green`,
+        `Write-Host ""`,
+        `Write-Host "Codex siap digunakan!" -ForegroundColor Cyan`,
+        `Write-Host "==================================================" -ForegroundColor Cyan`,
+        `Write-Host ""`,
+        `Pause`,
+      ];
+      const psScript = lines.join('\n');
+
+      const buffer = Buffer.from(psScript, 'utf16le');
+      const base64 = buffer.toString('base64');
+      const scriptContent = `@echo off\r\npowershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${base64}\r\n`;
+      return new NextResponse(scriptContent, {
+        headers: {
+          "Content-Type": "application/x-bat",
+          "Content-Disposition": "attachment; filename=\"switch-endpoint.bat\"",
+        },
       });
     }
 
+    const isInstalled = await checkCodexInstalled();
     const config = await readConfig();
+
+    const aliases = await getModelAliases();
+    const hasAliases = Object.keys(aliases || {}).some(k => 
+      CODEX_ALIAS_KEYS.includes(k.toLowerCase()) && aliases[k]
+    );
 
     return NextResponse.json({
       installed: true,
       config,
-      has9Router: has9RouterConfig(config),
+      isVirtual: !isInstalled,
+      has9Router: has9RouterConfig(config) || hasAliases,
       configPath: getCodexConfigPath(),
     });
   } catch (error) {

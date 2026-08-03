@@ -5,6 +5,7 @@ import { makeKv } from "../helpers/kvStore.js";
 const aliasKv = makeKv("modelAliases");
 const customKv = makeKv("customModels");
 const mitmKv = makeKv("mitmAlias");
+const modelIntegrationKv = makeKv("modelIntegration");
 
 // modelAliases: key=alias, value=modelString
 export async function getModelAliases() {
@@ -59,4 +60,12 @@ export async function getMitmAlias(toolName) {
 
 export async function setMitmAliasAll(toolName, mappings) {
   await mitmKv.set(toolName, mappings || {});
+}
+
+export async function getModelIntegrationConfig(key = "default") {
+  return await modelIntegrationKv.get(key, null);
+}
+
+export async function setModelIntegrationConfig(key = "default", config) {
+  await modelIntegrationKv.set(key, config || {});
 }

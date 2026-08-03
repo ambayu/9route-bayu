@@ -43,6 +43,7 @@ export {
   getModelAliases, setModelAlias, deleteModelAlias,
   getCustomModels, addCustomModel, deleteCustomModel,
   getMitmAlias, setMitmAliasAll,
+  getModelIntegrationConfig, setModelIntegrationConfig,
 } from "./repos/aliasRepo.js";
 
 // Pricing
