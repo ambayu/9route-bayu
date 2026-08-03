@@ -24,9 +24,9 @@ function buildOpenCodeJson({ baseUrl, apiKey, rows }) {
     : baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`;
   const safeRows = Array.isArray(rows) ? rows : [];
   const defaultRow = safeRows.find((r) => r && r.slot === "default") || safeRows[0];
-  const mainModel = defaultRow?.model?.trim() || "gpt-5.5";
+  const mainModel = getOpenCodeModelKey(defaultRow) || "gpt-5.5";
   const explorerRow = safeRows.find((r) => r && r.slot === "explorer") || safeRows[1] || defaultRow;
-  const explorerModel = explorerRow?.model?.trim() || mainModel;
+  const explorerModel = getOpenCodeModelKey(explorerRow) || mainModel;
 
   const modelsMap = {};
   for (const r of safeRows) {
