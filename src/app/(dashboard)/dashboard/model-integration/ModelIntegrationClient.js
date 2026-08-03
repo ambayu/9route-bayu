@@ -443,6 +443,8 @@ export default function ModelIntegrationClient() {
   const [selectingSlot, setSelectingSlot] = useState(null);
   const [newGrokName, setNewGrokName] = useState("");
   const [newGrokModel, setNewGrokModel] = useState("");
+  const [newOpenCodeName, setNewOpenCodeName] = useState("");
+  const [newOpenCodeModel, setNewOpenCodeModel] = useState("");
 
   useEffect(() => {
     let mounted = true;
@@ -536,6 +538,11 @@ export default function ModelIntegrationClient() {
       setSelectingSlot(null);
       return;
     }
+    if (selectingSlot === "__new_opencode__") {
+      setNewOpenCodeModel(value);
+      setSelectingSlot(null);
+      return;
+    }
     updateRow(selectingSlot, value);
     setSelectingSlot(null);
   };
@@ -568,6 +575,34 @@ export default function ModelIntegrationClient() {
     setToolRows((current) => ({ ...current, grok: current.grok.filter((row) => row.slot !== slot) }));
   };
 
+  const addOpenCodeModel = () => {
+    const name = newOpenCodeName.trim();
+    if (!name || !newOpenCodeModel) return;
+    const slot = name.toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
+    if (!slot) return;
+    setSaved(false);
+    setConfig((current) => ({
+      ...current,
+      rows: current.rows.some((row) => row.slot === slot)
+        ? current.rows.map((row) => row.slot === slot ? { ...row, label: name, model: newOpenCodeModel, custom: true } : row)
+        : [...current.rows, { slot, label: name, model: newOpenCodeModel, custom: true }],
+    }));
+    setToolRows((current) => ({
+      ...current,
+      opencode: (current.opencode || []).some((row) => row.slot === slot)
+        ? (current.opencode || []).map((row) => row.slot === slot ? { ...row, label: name, model: newOpenCodeModel, custom: true } : row)
+        : [...(current.opencode || []), { slot, label: name, model: newOpenCodeModel, custom: true }],
+    }));
+    setNewOpenCodeName("");
+    setNewOpenCodeModel("");
+  };
+
+  const removeOpenCodeModel = (slot) => {
+    setSaved(false);
+    setConfig((current) => ({ ...current, rows: current.rows.filter((row) => row.slot !== slot) }));
+    setToolRows((current) => ({ ...current, opencode: (current.opencode || []).filter((row) => row.slot !== slot) }));
+  };
+
   const saveConfig = async () => {
     const nextToolRows = {
       ...toolRows,
@@ -580,9 +615,12 @@ export default function ModelIntegrationClient() {
       tools: {
         codex: { rows: nextToolRows.codex },
         grok: { rows: nextToolRows.grok, newGrokName, newGrokModel },
+        opencode: { rows: nextToolRows.opencode, newOpenCodeName, newOpenCodeModel },
       },
       newGrokName,
       newGrokModel,
+      newOpenCodeName,
+      newOpenCodeModel,
     };
     setSaving(true);
     setSaveError("");
@@ -694,7 +732,7 @@ export default function ModelIntegrationClient() {
                       className="h-10 w-full rounded-[10px] border border-border bg-surface-2 px-3 text-sm text-text-main focus:border-brand-500/40 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
                     />
                     <Button className="whitespace-nowrap" variant="secondary" onClick={() => setSelectingSlot(row.slot)}>Select Model</Button>
-                    <Button variant="ghost" icon="delete" onClick={() => removeGrokModel(row.slot)} />
+                    <Button variant="ghost" icon="delete" onClick={() => (config.tool === "opencode" ? removeOpenCodeModel(row.slot) : removeGrokModel(row.slot))} />
                   </div>
                 ) : (
                   <div className="grid min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
