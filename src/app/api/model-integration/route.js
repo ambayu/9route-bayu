@@ -119,6 +119,53 @@ function sanitizeConfig(value) {
   };
 }
 
+function buildOpenCodeJson({ baseUrl, apiKey, rows }) {
+  const normalizedBaseUrl = baseUrl === "__9ROUTER_BASE_URL__"
+    ? baseUrl
+    : baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`;
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const defaultRow = safeRows.find((r) => r && r.slot === "default") || safeRows[0];
+  const mainModel = defaultRow?.model?.trim() || "gpt-5.5";
+  const explorerRow = safeRows.find((r) => r && r.slot === "explorer") || safeRows[1] || defaultRow;
+  const explorerModel = explorerRow?.model?.trim() || mainModel;
+
+  const modelsMap = {};
+  for (const r of safeRows) {
+    const m = r?.model?.trim();
+    if (m) {
+      modelsMap[m] = {
+        name: m,
+        modalities: { input: ["text", "image"], output: ["text"] },
+      };
+    }
+  }
+
+  const configObj = {
+    $schema: "https://opencode.ai/config.json",
+    model: `9router/${mainModel}`,
+    provider: {
+      "9router": {
+        npm: "@ai-sdk/openai-compatible",
+        name: "9Router",
+        options: {
+          baseURL: normalizedBaseUrl,
+          apiKey: apiKey || "sk_9router",
+        },
+        models: modelsMap,
+      },
+    },
+    agent: {
+      explorer: {
+        description: "Fast explorer subagent for codebase exploration",
+        mode: "subagent",
+        model: `9router/${explorerModel}`,
+      },
+    },
+  };
+
+  return JSON.stringify(configObj, null, 2);
+}
+
 export async function GET(request) {
   try {
     const config = await getModelIntegrationConfig();
@@ -133,6 +180,20 @@ export async function GET(request) {
       return new Response(toml, {
         headers: {
           "Content-Type": "text/plain; charset=utf-8",
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+    if (params?.get("tool") === "opencode" && (params?.get("format") === "json" || params?.get("format") === "opencode.json")) {
+      const baseUrl = params.get("baseUrl") || config?.baseUrl || "https://route9.nurset-studio.web.id/v1";
+      const jsonContent = buildOpenCodeJson({
+        baseUrl,
+        apiKey: config?.apiKey || "sk_9router",
+        rows: getOpenCodeRows(config || {}),
+      });
+      return new Response(jsonContent, {
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
           "Cache-Control": "no-store",
         },
       });
