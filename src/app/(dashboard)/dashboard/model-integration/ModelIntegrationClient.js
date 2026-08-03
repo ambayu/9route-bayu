@@ -325,6 +325,27 @@ function buildGrokSyncPs1() {
   ].join("\n");
 }
 
+function buildOpenCodeSyncPs1() {
+  return [
+    `param([switch]$Once)`,
+    `$DashboardUrl = "__9ROUTER_DASHBOARD_URL__".TrimEnd("/")`,
+    `$BaseUrl = "__9ROUTER_BASE_URL__"`,
+    `$ConfigDir = Join-Path $env:USERPROFILE ".config\\opencode"`,
+    `$ConfigPath = Join-Path $ConfigDir "opencode.json"`,
+    `do {`,
+    `  try {`,
+    `    $EncodedBaseUrl = [System.Uri]::EscapeDataString($BaseUrl)`,
+    `    $Uri = "$DashboardUrl/api/v1/model-integration/opencode.json?baseUrl=$EncodedBaseUrl"`,
+    `    [System.IO.Directory]::CreateDirectory($ConfigDir) | Out-Null`,
+    `    Invoke-WebRequest -Uri $Uri -UseBasicParsing -TimeoutSec 20 -Headers @{ Accept = "application/json" } -OutFile $ConfigPath`,
+    `  } catch {}`,
+    `  if ($Once) { break }`,
+    `  Start-Sleep -Seconds 20`,
+    `} while ($true)`,
+    "",
+  ].join("\n");
+}
+
 function writeBatchFileBlock(targetVar, content) {
   return [
     `> "%${targetVar}%" (`,
@@ -402,6 +423,8 @@ function buildBat(config) {
     return buildPlainBat([
       "set \"CONFIG_DIR=%USERPROFILE%\\.config\\opencode\"",
       "set \"CONFIG_PATH=%CONFIG_DIR%\\opencode.json\"",
+      "set \"SYNC_PATH=%CONFIG_DIR%\\9router-opencode-sync.ps1\"",
+      "set \"STARTUP_PATH=%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\9router-opencode-model-sync.cmd\"",
       "if not exist \"%CONFIG_DIR%\" mkdir \"%CONFIG_DIR%\"",
       "echo Pilih endpoint OpenCode:",
       "echo 1. 9Router local       http://127.0.0.1:20128/v1",
@@ -420,14 +443,26 @@ function buildBat(config) {
       ")",
       "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='Stop'; Invoke-WebRequest -Uri '%CONFIG_URL%' -UseBasicParsing -Headers @{ Accept='application/json' } -OutFile '%CONFIG_PATH%'\"",
       "if errorlevel 1 goto opencode_fetch_failed",
+      ...writeBatchFileBlock("SYNC_PATH", buildOpenCodeSyncPs1()
+        .replaceAll("__9ROUTER_BASE_URL__", "%BASE_URL%")
+        .replaceAll("__9ROUTER_DASHBOARD_URL__", "%DASHBOARD_URL%")),
+      "> \"%STARTUP_PATH%\" (",
+      "  echo @echo off",
+      "  echo start \"\" powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"%SYNC_PATH%\"",
+      "  echo.",
+      ")",
+      "start \"\" powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"%SYNC_PATH%\"",
       `setx OPENAI_API_KEY "${escapeBat(apiKey)}" >nul`,
       "echo OpenCode config updated at %CONFIG_PATH%",
+      "echo Auto-sync aktif. Perubahan dashboard akan ditarik ke config lokal tiap 20 detik.",
       "echo Tutup dan buka ulang OpenCode agar daftar /model dibaca ulang.",
       "goto done",
       ":opencode_fetch_failed",
       "echo Gagal download opencode.json dari %CONFIG_URL%",
       "goto done",
       ":opencode_default",
+      "if exist \"%STARTUP_PATH%\" del /F /Q \"%STARTUP_PATH%\"",
+      "if exist \"%SYNC_PATH%\" del /F /Q \"%SYNC_PATH%\"",
       "if exist \"%CONFIG_PATH%\" copy /Y \"%CONFIG_PATH%\" \"%CONFIG_PATH%.bak\" >nul",
       "if exist \"%CONFIG_PATH%\" del /F /Q \"%CONFIG_PATH%\"",
       "echo OpenCode dikembalikan ke config bawaan.",
