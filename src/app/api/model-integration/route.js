@@ -74,6 +74,27 @@ async function syncCodexModelAliases(config) {
   );
 }
 
+function getOpenCodeModelKey(row) {
+  const model = row?.model?.trim();
+  if (!model) return "";
+  if (!model.includes("/")) return model;
+  const labelKey = String(row?.label || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return labelKey || String(row?.slot || "").trim() || model.replaceAll("/", "-");
+}
+
+async function syncOpenCodeModelAliases(config) {
+  const rows = getOpenCodeRows(config);
+  await Promise.all(
+    rows
+      .filter((row) => row?.model?.includes("/"))
+      .map((row) => setModelAlias(getOpenCodeModelKey(row), row.model)),
+  );
+}
+
 function sanitizeConfig(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const sanitizeRows = (rows) => Array.isArray(rows)
@@ -133,8 +154,9 @@ function buildOpenCodeJson({ baseUrl, apiKey, rows }) {
   for (const r of safeRows) {
     const m = r?.model?.trim();
     if (m) {
-      modelsMap[m] = {
-        name: m,
+      const modelKey = getOpenCodeModelKey(r);
+      modelsMap[modelKey] = {
+        name: modelKey,
         modalities: { input: ["text", "image"], output: ["text"] },
       };
     }
@@ -214,6 +236,7 @@ export async function PUT(request) {
     }
     await setModelIntegrationConfig("default", config);
     await syncCodexModelAliases(config);
+    await syncOpenCodeModelAliases(config);
     return NextResponse.json({ success: true, config });
   } catch (error) {
     console.log("Error saving model integration config:", error.message);

@@ -6,6 +6,18 @@ function getOpenCodeRows(config) {
   return config.tools?.opencode?.rows || (config.tool === "opencode" ? config.rows : []);
 }
 
+function getOpenCodeModelKey(row) {
+  const model = row?.model?.trim();
+  if (!model) return "";
+  if (!model.includes("/")) return model;
+  const labelKey = String(row?.label || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return labelKey || String(row?.slot || "").trim() || model.replaceAll("/", "-");
+}
+
 function buildOpenCodeJson({ baseUrl, apiKey, rows }) {
   const normalizedBaseUrl = baseUrl === "__9ROUTER_BASE_URL__"
     ? baseUrl
@@ -20,8 +32,9 @@ function buildOpenCodeJson({ baseUrl, apiKey, rows }) {
   for (const r of safeRows) {
     const m = r?.model?.trim();
     if (m) {
-      modelsMap[m] = {
-        name: m,
+      const modelKey = getOpenCodeModelKey(r);
+      modelsMap[modelKey] = {
+        name: modelKey,
         modalities: { input: ["text", "image"], output: ["text"] },
       };
     }

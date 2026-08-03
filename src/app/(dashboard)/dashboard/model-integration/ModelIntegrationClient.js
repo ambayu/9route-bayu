@@ -255,8 +255,9 @@ function buildOpenCodeJson({ baseUrl = "", apiKey = "", rows = [] }) {
   for (const r of safeRows) {
     const m = r?.model?.trim();
     if (m) {
-      modelsMap[m] = {
-        name: m,
+      const modelKey = getOpenCodeModelKey(r);
+      modelsMap[modelKey] = {
+        name: modelKey,
         modalities: { input: ["text", "image"], output: ["text"] },
       };
     }
@@ -286,6 +287,18 @@ function buildOpenCodeJson({ baseUrl = "", apiKey = "", rows = [] }) {
   };
 
   return JSON.stringify(configObj, null, 2);
+}
+
+function getOpenCodeModelKey(row) {
+  const model = row?.model?.trim();
+  if (!model) return "";
+  if (!model.includes("/")) return model;
+  const labelKey = String(row?.label || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return labelKey || String(row?.slot || "").trim() || model.replaceAll("/", "-");
 }
 
 function buildGrokSyncPs1() {
