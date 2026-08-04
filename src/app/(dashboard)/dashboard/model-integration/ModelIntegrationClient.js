@@ -331,11 +331,13 @@ function buildOpenCodeSyncPs1() {
     `$BaseUrl = "__9ROUTER_BASE_URL__"`,
     `$ConfigDir = Join-Path $env:USERPROFILE ".config\\opencode"`,
     `$ConfigPath = Join-Path $ConfigDir "opencode.json"`,
+    `$CachePath = Join-Path $env:USERPROFILE ".cache\\opencode\\models.json"`,
     `try {`,
     `  $EncodedBaseUrl = [System.Uri]::EscapeDataString($BaseUrl)`,
     `  $Uri = "$DashboardUrl/api/v1/model-integration/opencode.json?baseUrl=$EncodedBaseUrl"`,
     `  [System.IO.Directory]::CreateDirectory($ConfigDir) | Out-Null`,
     `  Invoke-WebRequest -Uri $Uri -UseBasicParsing -TimeoutSec 20 -Headers @{ Accept = "application/json" } -OutFile $ConfigPath`,
+    `  if (Test-Path $CachePath) { Remove-Item -LiteralPath $CachePath -Force }`,
     `} catch {}`,
     "",
   ].join("\n");
@@ -444,6 +446,7 @@ function buildBat(config) {
       "set \"SYNC_PATH=%CONFIG_DIR%\\9router-opencode-sync.ps1\"",
       "set \"LAUNCHER_DIR=%CONFIG_DIR%\\bin\"",
       "set \"LAUNCHER_PATH=%LAUNCHER_DIR%\\opencode.cmd\"",
+      "set \"CACHE_PATH=%USERPROFILE%\\.cache\\opencode\\models.json\"",
       "set \"STARTUP_PATH=%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\9router-opencode-model-sync.cmd\"",
       "if not exist \"%CONFIG_DIR%\" mkdir \"%CONFIG_DIR%\"",
       "if not exist \"%LAUNCHER_DIR%\" mkdir \"%LAUNCHER_DIR%\"",
@@ -466,6 +469,7 @@ function buildBat(config) {
       "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*9router-opencode-sync.ps1*' } | ForEach-Object { $_.Terminate() | Out-Null }\" >nul 2>nul",
       "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='Stop'; Invoke-WebRequest -Uri '%CONFIG_URL%' -UseBasicParsing -Headers @{ Accept='application/json' } -OutFile '%CONFIG_PATH%'\"",
       "if errorlevel 1 goto opencode_fetch_failed",
+      "if exist \"%CACHE_PATH%\" del /F /Q \"%CACHE_PATH%\"",
       ...writeBatchFileBlock("SYNC_PATH", buildOpenCodeSyncPs1()
         .replaceAll("__9ROUTER_BASE_URL__", "%BASE_URL%")
         .replaceAll("__9ROUTER_DASHBOARD_URL__", "%DASHBOARD_URL%")),
@@ -485,6 +489,7 @@ function buildBat(config) {
       "if exist \"%CONFIG_PATH%\" del /F /Q \"%CONFIG_PATH%\"",
       "if exist \"%SYNC_PATH%\" del /F /Q \"%SYNC_PATH%\"",
       "if exist \"%LAUNCHER_PATH%\" del /F /Q \"%LAUNCHER_PATH%\"",
+      "if exist \"%CACHE_PATH%\" del /F /Q \"%CACHE_PATH%\"",
       "if exist \"%STARTUP_PATH%\" del /F /Q \"%STARTUP_PATH%\"",
       "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*9router-opencode-sync.ps1*' } | ForEach-Object { $_.Terminate() | Out-Null }\" >nul 2>nul",
       "echo OpenCode dikembalikan ke config bawaan.",
