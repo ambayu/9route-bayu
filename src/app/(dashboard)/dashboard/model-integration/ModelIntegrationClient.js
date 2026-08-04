@@ -451,20 +451,21 @@ function buildBat(config) {
       "  echo start \"\" powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"%SYNC_PATH%\"",
       "  echo.",
       ")",
-      "start \"\" powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"%SYNC_PATH%\"",
+      "start \"\" powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"%SYNC_PATH%\" -Once",
       `setx OPENAI_API_KEY "${escapeBat(apiKey)}" >nul`,
       "echo OpenCode config updated at %CONFIG_PATH%",
       "echo Auto-sync aktif. Perubahan dashboard akan ditarik ke config lokal tiap 20 detik.",
-      "echo Tutup dan buka ulang OpenCode agar daftar /model dibaca ulang.",
+      "echo Tutup dan buka ulang OpenCode agar perubahan terbaca.",
       "goto done",
       ":opencode_fetch_failed",
       "echo Gagal download opencode.json dari %CONFIG_URL%",
+      "echo Pastikan endpoint 9Router aktif lalu jalankan BAT ini lagi.",
       "goto done",
       ":opencode_default",
-      "if exist \"%STARTUP_PATH%\" del /F /Q \"%STARTUP_PATH%\"",
-      "if exist \"%SYNC_PATH%\" del /F /Q \"%SYNC_PATH%\"",
       "if exist \"%CONFIG_PATH%\" copy /Y \"%CONFIG_PATH%\" \"%CONFIG_PATH%.bak\" >nul",
       "if exist \"%CONFIG_PATH%\" del /F /Q \"%CONFIG_PATH%\"",
+      "if exist \"%SYNC_PATH%\" del /F /Q \"%SYNC_PATH%\"",
+      "if exist \"%STARTUP_PATH%\" del /F /Q \"%STARTUP_PATH%\"",
       "echo OpenCode dikembalikan ke config bawaan.",
       ":done",
     ]);
@@ -727,11 +728,21 @@ export default function ModelIntegrationClient() {
 
   const downloadScript = async () => {
     await saveConfig();
+    
+    // Generate short filename: 9router-{tool}-{YYMMDD}-{HHmm}.bat
+    const now = new Date();
+    const yy = String(now.getFullYear()).slice(-2);
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const hh = String(now.getHours()).padStart(2, '0');
+    const min = String(now.getMinutes()).padStart(2, '0');
+    const shortName = `9router-${config.tool}-${yy}${mm}${dd}-${hh}${min}`;
+    
     const blob = new Blob([script], { type: "application/bat;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `9router-${config.tool}-model-config.bat`;
+    link.download = `${shortName}.bat`;
     document.body.appendChild(link);
     link.click();
     link.remove();
