@@ -292,12 +292,12 @@ function buildOpenCodeJson({ baseUrl = "", apiKey = "", rows = [] }) {
 function getOpenCodeModelKey(row) {
   const model = row?.model?.trim();
   if (!model) return "";
-  const labelKey = String(row?.label || "")
+  const slotKey = String(row?.slot || "")
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9._-]+/g, "-")
     .replace(/^-+|-+$/g, "");
-  return labelKey || String(row?.slot || "").trim() || model.replaceAll("/", "-");
+  return slotKey || model.replaceAll("/", "-");
 }
 
 function buildGrokSyncPs1() {
