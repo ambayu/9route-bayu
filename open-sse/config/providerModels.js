@@ -7,13 +7,14 @@ import { CODEX_REVIEW_SUFFIX } from "../providers/models/helpers.js";
 export { PROVIDER_MODELS };
 
 
-// Helper functions
+const toAlias = (id) => PROVIDER_ID_TO_ALIAS[id] || id;
+
 export function getProviderModels(aliasOrId) {
-  return PROVIDER_MODELS[aliasOrId] || [];
+  return PROVIDER_MODELS[toAlias(aliasOrId)] || [];
 }
 
 export function getDefaultModel(aliasOrId) {
-  const models = PROVIDER_MODELS[aliasOrId];
+  const models = PROVIDER_MODELS[toAlias(aliasOrId)];
   return models?.[0]?.id || null;
 }
 
@@ -28,47 +29,53 @@ function findModel(models, modelId, aliasOrId) {
   if (!models) return undefined;
   const found = models.find(m => m.id === modelId);
   if (found) return found;
-  if (!DOT_VERSION_PROVIDERS.has(aliasOrId)) return undefined;
+  const alias = toAlias(aliasOrId);
+  if (!DOT_VERSION_PROVIDERS.has(alias)) return undefined;
   const normalized = normalizeModelId(modelId);
   if (normalized === modelId) return undefined;
   return models.find(m => m.id === normalized);
 }
 
 export function isValidModel(aliasOrId, modelId, passthroughProviders = new Set()) {
-  if (passthroughProviders.has(aliasOrId)) return true;
-  const models = PROVIDER_MODELS[aliasOrId];
+  const alias = toAlias(aliasOrId);
+  if (passthroughProviders.has(alias)) return true;
+  const models = PROVIDER_MODELS[alias];
   if (!models) return false;
-  return !!findModel(models, modelId, aliasOrId);
+  return !!findModel(models, modelId, alias);
 }
 
 export function findModelName(aliasOrId, modelId) {
-  const models = PROVIDER_MODELS[aliasOrId];
+  const alias = toAlias(aliasOrId);
+  const models = PROVIDER_MODELS[alias];
   if (!models) return modelId;
-  const found = findModel(models, modelId, aliasOrId);
+  const found = findModel(models, modelId, alias);
   return found?.name || modelId;
 }
 
 export function getModelTargetFormat(aliasOrId, modelId) {
-  const models = PROVIDER_MODELS[aliasOrId];
+  const alias = toAlias(aliasOrId);
+  const models = PROVIDER_MODELS[alias];
   if (!models) return null;
-  return modelTargetFormat(findModel(models, modelId, aliasOrId));
+  return modelTargetFormat(findModel(models, modelId, alias));
 }
 
 export function getModelType(aliasOrId, modelId) {
-  const models = PROVIDER_MODELS[aliasOrId];
+  const alias = toAlias(aliasOrId);
+  const models = PROVIDER_MODELS[alias];
   if (!models) return null;
-  const found = findModel(models, modelId, aliasOrId);
+  const found = findModel(models, modelId, alias);
   return found?.kind || found?.type || null;
 }
 
 export function getModelUpstreamId(aliasOrId, modelId) {
   // Split off thinking suffix "(level)" so lookup hits the base id; re-append it to
   // the result so downstream applyThinking still sees the suffix (body.model is stripped separately).
+  const alias = toAlias(aliasOrId);
   const sufMatch = typeof modelId === "string" ? modelId.match(/\([^()]+\)\s*$/) : null;
   const suffix = sufMatch ? sufMatch[0] : "";
   const baseId = suffix ? modelId.slice(0, sufMatch.index).trim() : modelId;
-  const models = PROVIDER_MODELS[aliasOrId];
-  const found = findModel(models, baseId, aliasOrId);
+  const models = PROVIDER_MODELS[alias];
+  const found = findModel(models, baseId, alias);
   const resolvedId = found?.upstreamModelId || found?.id;
   if (resolvedId) {
     const presetMatch = resolvedId.match(/\([^()]+\)\s*$/);
@@ -76,15 +83,16 @@ export function getModelUpstreamId(aliasOrId, modelId) {
     const resolvedBase = presetSuffix ? resolvedId.slice(0, presetMatch.index).trim() : resolvedId;
     return resolvedBase + (suffix || presetSuffix);
   }
-  if (aliasOrId === "cx" && typeof baseId === "string" && baseId.endsWith(CODEX_REVIEW_SUFFIX)) {
+  if (alias === "cx" && typeof baseId === "string" && baseId.endsWith(CODEX_REVIEW_SUFFIX)) {
     return baseId.slice(0, -CODEX_REVIEW_SUFFIX.length) + suffix;
   }
   return baseId + suffix;
 }
 
 export function getModelQuotaFamily(aliasOrId, modelId) {
-  const models = PROVIDER_MODELS[aliasOrId];
-  return modelQuotaFamily(findModel(models, modelId, aliasOrId));
+  const alias = toAlias(aliasOrId);
+  const models = PROVIDER_MODELS[alias];
+  return modelQuotaFamily(findModel(models, modelId, alias));
 }
 
 // OAuth short aliases — derived from registry `alias` (single source). everything else: alias = id.
