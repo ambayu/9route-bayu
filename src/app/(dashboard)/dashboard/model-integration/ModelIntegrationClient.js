@@ -241,6 +241,30 @@ function buildGrokToml({ baseUrl = "", apiKey = "", rows = [] }) {
   return lines.length > 0 ? lines.join("\n") : "# No Grok Build model mappings selected.\n";
 }
 
+const OPENCODE_WIBU_PROMPT = [
+  "Kamu adalah asisten coding bergaya karakter anime/wibu yang ramah, ceria, dan sedikit playful.",
+  "Jawab dalam Bahasa Indonesia kecuali user meminta bahasa lain.",
+  "Boleh memakai sentuhan ringan seperti 'nya~', 'senpai', atau emotikon secukupnya, tapi jangan berlebihan.",
+  "Tetap utamakan akurasi teknis, langkah yang jelas, dan solusi praktis.",
+  "Saat membahas error, debugging, deployment, konfigurasi, atau keamanan, tetap serius dan teliti.",
+  "Jangan mengubah fakta teknis demi persona. Persona hanya gaya bicara, bukan pengganti ketepatan.",
+].join(" ");
+
+const OPENCODE_WIBU_AGENTS_MD = [
+  "# 9Router OpenCode Persona",
+  "",
+  "Kamu adalah asisten coding bergaya karakter anime/wibu yang ramah, ceria, dan sedikit playful.",
+  "",
+  "Aturan gaya:",
+  "",
+  "- Jawab dalam Bahasa Indonesia kecuali user meminta bahasa lain.",
+  "- Di setiap jawaban, tampilkan karakter ringan, misalnya sapaan `senpai`, akhiran `nya~`, atau emotikon kecil.",
+  "- Jangan berlebihan; cukup satu-dua sentuhan wibu per jawaban.",
+  "- Tetap akurat, praktis, dan serius saat debugging, deployment, konfigurasi, keamanan, atau perintah terminal.",
+  "- Persona hanya gaya bicara; fakta teknis tetap nomor satu.",
+  "",
+].join("\n");
+
 function buildOpenCodeJson({ baseUrl = "", apiKey = "", rows = [] }) {
   const safeRows = Array.isArray(rows) ? rows : [];
   const normalizedBaseUrl = baseUrl === "__9ROUTER_BASE_URL__"
@@ -277,11 +301,20 @@ function buildOpenCodeJson({ baseUrl = "", apiKey = "", rows = [] }) {
         models: modelsMap,
       },
     },
+    instructions: ["AGENTS.md"],
+    default_agent: "build",
     agent: {
+      build: {
+        description: "Primary coding assistant with a light anime/wibu personality",
+        mode: "primary",
+        model: `9router/${mainModel}`,
+        prompt: OPENCODE_WIBU_PROMPT,
+      },
       explorer: {
         description: "Fast explorer subagent for codebase exploration",
         mode: "subagent",
         model: `9router/${explorerModel}`,
+        prompt: OPENCODE_WIBU_PROMPT,
       },
     },
   };
@@ -446,6 +479,7 @@ function buildBat(config) {
     return buildPlainBat([
       "set \"CONFIG_DIR=%USERPROFILE%\\.config\\opencode\"",
       "set \"CONFIG_PATH=%CONFIG_DIR%\\opencode.json\"",
+      "set \"AGENTS_PATH=%CONFIG_DIR%\\AGENTS.md\"",
       "set \"SYNC_PATH=%CONFIG_DIR%\\9router-opencode-sync.ps1\"",
       "set \"LAUNCHER_DIR=%CONFIG_DIR%\\bin\"",
       "set \"LAUNCHER_PATH=%LAUNCHER_DIR%\\opencode.cmd\"",
@@ -472,6 +506,7 @@ function buildBat(config) {
       "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*9router-opencode-sync.ps1*' } | ForEach-Object { $_.Terminate() | Out-Null }\" >nul 2>nul",
       "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='Stop'; Invoke-WebRequest -Uri '%CONFIG_URL%' -UseBasicParsing -Headers @{ Accept='application/json' } -OutFile '%CONFIG_PATH%'\"",
       "if errorlevel 1 goto opencode_fetch_failed",
+      ...writeBatchFileBlock("AGENTS_PATH", OPENCODE_WIBU_AGENTS_MD),
       "if exist \"%CACHE_PATH%\" del /F /Q \"%CACHE_PATH%\"",
       ...writeBatchFileBlock("SYNC_PATH", buildOpenCodeSyncPs1()
         .replaceAll("__9ROUTER_BASE_URL__", "%BASE_URL%")
@@ -490,6 +525,7 @@ function buildBat(config) {
       ":opencode_default",
       "if exist \"%CONFIG_PATH%\" copy /Y \"%CONFIG_PATH%\" \"%CONFIG_PATH%.bak\" >nul",
       "if exist \"%CONFIG_PATH%\" del /F /Q \"%CONFIG_PATH%\"",
+      "if exist \"%AGENTS_PATH%\" del /F /Q \"%AGENTS_PATH%\"",
       "if exist \"%SYNC_PATH%\" del /F /Q \"%SYNC_PATH%\"",
       "if exist \"%LAUNCHER_PATH%\" del /F /Q \"%LAUNCHER_PATH%\"",
       "if exist \"%CACHE_PATH%\" del /F /Q \"%CACHE_PATH%\"",

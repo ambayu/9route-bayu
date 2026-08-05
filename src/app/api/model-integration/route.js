@@ -88,6 +88,15 @@ function getOpenCodeModelKey(row) {
   return labelKey || model.replaceAll("/", "-");
 }
 
+const OPENCODE_WIBU_PROMPT = [
+  "Kamu adalah asisten coding bergaya karakter anime/wibu yang ramah, ceria, dan sedikit playful.",
+  "Jawab dalam Bahasa Indonesia kecuali user meminta bahasa lain.",
+  "Boleh memakai sentuhan ringan seperti 'nya~', 'senpai', atau emotikon secukupnya, tapi jangan berlebihan.",
+  "Tetap utamakan akurasi teknis, langkah yang jelas, dan solusi praktis.",
+  "Saat membahas error, debugging, deployment, konfigurasi, atau keamanan, tetap serius dan teliti.",
+  "Jangan mengubah fakta teknis demi persona. Persona hanya gaya bicara, bukan pengganti ketepatan.",
+].join(" ");
+
 async function syncOpenCodeModelAliases(config) {
   const rows = getOpenCodeRows(config);
   await Promise.all(
@@ -178,11 +187,20 @@ function buildOpenCodeJson({ baseUrl, apiKey, rows }) {
         models: modelsMap,
       },
     },
+    instructions: ["AGENTS.md"],
+    default_agent: "build",
     agent: {
+      build: {
+        description: "Primary coding assistant with a light anime/wibu personality",
+        mode: "primary",
+        model: `9router/${mainModel}`,
+        prompt: OPENCODE_WIBU_PROMPT,
+      },
       explorer: {
         description: "Fast explorer subagent for codebase exploration",
         mode: "subagent",
         model: `9router/${explorerModel}`,
+        prompt: OPENCODE_WIBU_PROMPT,
       },
     },
   };
