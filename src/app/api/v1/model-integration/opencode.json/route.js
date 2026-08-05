@@ -6,6 +6,10 @@ function getOpenCodeRows(config) {
   return config.tools?.opencode?.rows || (config.tool === "opencode" ? config.rows : []);
 }
 
+function getOpenCodePersonaPrompts(config) {
+  return config.tools?.opencode?.personaPrompts || config.opencodePersonaPrompts || {};
+}
+
 function getOpenCodeModelKey(row) {
   const model = row?.model?.trim();
   if (!model) return "";
@@ -31,7 +35,17 @@ const OPENCODE_WIBU_PROMPT = [
   "Jangan mengubah fakta teknis demi persona. Persona hanya gaya bicara, bukan pengganti ketepatan.",
 ].join(" ");
 
-function buildOpenCodeJson({ baseUrl, apiKey, rows }) {
+function getCurrentDayKey(date = new Date()) {
+  return ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"][date.getDay()];
+}
+
+function getOpenCodePersonaPrompt(config) {
+  const prompts = getOpenCodePersonaPrompts(config || {});
+  const dayPrompt = String(prompts?.[getCurrentDayKey()] || "").trim();
+  return dayPrompt || OPENCODE_WIBU_PROMPT;
+}
+
+function buildOpenCodeJson({ baseUrl, apiKey, rows, personaPrompt = OPENCODE_WIBU_PROMPT }) {
   const normalizedBaseUrl = baseUrl === "__9ROUTER_BASE_URL__"
     ? baseUrl
     : baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`;
@@ -74,13 +88,13 @@ function buildOpenCodeJson({ baseUrl, apiKey, rows }) {
         description: "Primary coding assistant with a light anime/wibu personality",
         mode: "primary",
         model: `9router/${mainModel}`,
-        prompt: OPENCODE_WIBU_PROMPT,
+        prompt: personaPrompt,
       },
       explorer: {
         description: "Fast explorer subagent for codebase exploration",
         mode: "subagent",
         model: `9router/${explorerModel}`,
-        prompt: OPENCODE_WIBU_PROMPT,
+        prompt: personaPrompt,
       },
     },
   };
@@ -98,6 +112,7 @@ export async function GET(request) {
       baseUrl,
       apiKey: config?.apiKey || "sk_9router",
       rows: getOpenCodeRows(config || {}),
+      personaPrompt: getOpenCodePersonaPrompt(config || {}),
     });
     return new Response(jsonContent, {
       headers: {

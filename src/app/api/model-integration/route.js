@@ -15,6 +15,10 @@ function getOpenCodeRows(config) {
   return config.tools?.opencode?.rows || (config.tool === "opencode" ? config.rows : []);
 }
 
+function getOpenCodePersonaPrompts(config) {
+  return config.tools?.opencode?.personaPrompts || config.opencodePersonaPrompts || {};
+}
+
 function buildGrokToml({ baseUrl, apiKey, rows }) {
   const normalizedBaseUrl = baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`;
   const mainModel = rows.find((row) => row.slot === "default")?.model?.trim();
@@ -99,6 +103,16 @@ const OPENCODE_WIBU_PROMPT = [
   "Jangan mengubah fakta teknis demi persona. Persona hanya gaya bicara, bukan pengganti ketepatan.",
 ].join(" ");
 
+function getCurrentDayKey(date = new Date()) {
+  return ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"][date.getDay()];
+}
+
+function getOpenCodePersonaPrompt(config) {
+  const prompts = getOpenCodePersonaPrompts(config || {});
+  const dayPrompt = String(prompts?.[getCurrentDayKey()] || "").trim();
+  return dayPrompt || OPENCODE_WIBU_PROMPT;
+}
+
 async function syncOpenCodeModelAliases(config) {
   const rows = getOpenCodeRows(config);
   await Promise.all(
@@ -110,6 +124,14 @@ async function syncOpenCodeModelAliases(config) {
 
 function sanitizeConfig(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const sanitizePersonaPrompts = (prompts) => {
+    if (!prompts || typeof prompts !== "object" || Array.isArray(prompts)) return {};
+    return Object.fromEntries(
+      ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+        .map((day) => [day, String(prompts[day] || "").trim()])
+        .filter(([, prompt]) => prompt),
+    );
+  };
   const sanitizeRows = (rows) => Array.isArray(rows)
     ? rows
         .filter((row) => row && typeof row === "object")
@@ -136,6 +158,7 @@ function sanitizeConfig(value) {
           rows: sanitizeRows(value.tools.opencode?.rows),
           newOpenCodeName: String(value.tools.opencode?.newOpenCodeName || "").trim(),
           newOpenCodeModel: String(value.tools.opencode?.newOpenCodeModel || "").trim(),
+          personaPrompts: sanitizePersonaPrompts(value.tools.opencode?.personaPrompts || value.opencodePersonaPrompts),
         },
       }
     : null;
@@ -150,10 +173,11 @@ function sanitizeConfig(value) {
     newGrokModel: String(value.newGrokModel || "").trim(),
     newOpenCodeName: String(value.newOpenCodeName || "").trim(),
     newOpenCodeModel: String(value.newOpenCodeModel || "").trim(),
+    opencodePersonaPrompts: sanitizePersonaPrompts(value.opencodePersonaPrompts || value.tools?.opencode?.personaPrompts),
   };
 }
 
-function buildOpenCodeJson({ baseUrl, apiKey, rows }) {
+function buildOpenCodeJson({ baseUrl, apiKey, rows, personaPrompt = OPENCODE_WIBU_PROMPT }) {
   const normalizedBaseUrl = baseUrl === "__9ROUTER_BASE_URL__"
     ? baseUrl
     : baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`;
@@ -196,13 +220,13 @@ function buildOpenCodeJson({ baseUrl, apiKey, rows }) {
         description: "Primary coding assistant with a light anime/wibu personality",
         mode: "primary",
         model: `9router/${mainModel}`,
-        prompt: OPENCODE_WIBU_PROMPT,
+        prompt: personaPrompt,
       },
       explorer: {
         description: "Fast explorer subagent for codebase exploration",
         mode: "subagent",
         model: `9router/${explorerModel}`,
-        prompt: OPENCODE_WIBU_PROMPT,
+        prompt: personaPrompt,
       },
     },
   };
@@ -234,6 +258,7 @@ export async function GET(request) {
         baseUrl,
         apiKey: config?.apiKey || "sk_9router",
         rows: getOpenCodeRows(config || {}),
+        personaPrompt: getOpenCodePersonaPrompt(config || {}),
       });
       return new Response(jsonContent, {
         headers: {

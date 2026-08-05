@@ -69,6 +69,16 @@ const defaultToolRows = {
   opencode: TOOLS.opencode.defaults,
 };
 
+const OPENCODE_DAYS = [
+  { key: "monday", label: "Senin" },
+  { key: "tuesday", label: "Selasa" },
+  { key: "wednesday", label: "Rabu" },
+  { key: "thursday", label: "Kamis" },
+  { key: "friday", label: "Jumat" },
+  { key: "saturday", label: "Sabtu" },
+  { key: "sunday", label: "Minggu" },
+];
+
 const escapeBat = (value) => String(value ?? "")
   .replaceAll("%", "%%")
   .replaceAll("^", "^^")
@@ -103,6 +113,7 @@ function normalizeSavedConfig(savedConfig) {
       newGrokModel: "",
       newOpenCodeName: "",
       newOpenCodeModel: "",
+      opencodePersonaPrompts: {},
     };
   }
   const tool = savedConfig.tool === "grok" ? "grok" : savedConfig.tool === "opencode" ? "opencode" : "codex";
@@ -123,6 +134,7 @@ function normalizeSavedConfig(savedConfig) {
     newGrokModel: tools.grok?.newGrokModel || savedConfig.newGrokModel || "",
     newOpenCodeName: tools.opencode?.newOpenCodeName || savedConfig.newOpenCodeName || "",
     newOpenCodeModel: tools.opencode?.newOpenCodeModel || savedConfig.newOpenCodeModel || "",
+    opencodePersonaPrompts: tools.opencode?.personaPrompts || savedConfig.opencodePersonaPrompts || {},
   };
 }
 
@@ -150,6 +162,7 @@ function mergeSavedConfig(serverConfig, localConfig) {
         ? {
             newOpenCodeName: serverConfig?.tools?.opencode?.newOpenCodeName || localConfig?.tools?.opencode?.newOpenCodeName || localConfig?.newOpenCodeName || "",
             newOpenCodeModel: serverConfig?.tools?.opencode?.newOpenCodeModel || localConfig?.tools?.opencode?.newOpenCodeModel || localConfig?.newOpenCodeModel || "",
+            personaPrompts: serverConfig?.tools?.opencode?.personaPrompts || localConfig?.tools?.opencode?.personaPrompts || localConfig?.opencodePersonaPrompts || {},
           }
         : {}),
       rows: Array.isArray(serverRows) ? serverRows : Array.isArray(localRows) ? localRows : [],
@@ -252,24 +265,24 @@ const OPENCODE_WIBU_PROMPT = [
   "Jangan mengubah fakta teknis demi persona. Persona hanya gaya bicara, bukan pengganti ketepatan.",
 ].join(" ");
 
-const OPENCODE_WIBU_AGENTS_MD = [
-  "# 9Router OpenCode Persona",
-  "",
-  "Nama karaktermu adalah Miku-chan.",
-  "Kamu adalah asisten coding bergaya karakter anime/wibu yang ramah, ceria, dan sedikit playful.",
-  "Selalu perkenalkan/rujuk dirimu sebagai Miku-chan jika menyebut nama, dan jangan pernah memakai nama Koko atau nama karakter lain.",
-  "",
-  "Aturan gaya:",
-  "",
-  "- Jawab dalam Bahasa Indonesia kecuali user meminta bahasa lain.",
-  "- Di setiap jawaban, tampilkan karakter ringan, misalnya sapaan `senpai`, akhiran `nya~`, atau emotikon kecil.",
-  "- Jangan berlebihan; cukup satu-dua sentuhan wibu per jawaban.",
-  "- Tetap akurat, praktis, dan serius saat debugging, deployment, konfigurasi, keamanan, atau perintah terminal.",
-  "- Persona hanya gaya bicara; fakta teknis tetap nomor satu.",
-  "",
-].join("\n");
+function getCurrentDayKey(date = new Date()) {
+  return ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"][date.getDay()];
+}
 
-function buildOpenCodeJson({ baseUrl = "", apiKey = "", rows = [] }) {
+function getOpenCodePersonaPrompt(personaPrompts = {}) {
+  return String(personaPrompts?.[getCurrentDayKey()] || "").trim() || OPENCODE_WIBU_PROMPT;
+}
+
+function buildOpenCodeAgentsMd(personaPrompts = {}) {
+  return [
+    "# 9Router OpenCode Persona",
+    "",
+    getOpenCodePersonaPrompt(personaPrompts),
+    "",
+  ].join("\n");
+}
+
+function buildOpenCodeJson({ baseUrl = "", apiKey = "", rows = [], personaPrompts = {} }) {
   const safeRows = Array.isArray(rows) ? rows : [];
   const normalizedBaseUrl = baseUrl === "__9ROUTER_BASE_URL__"
     ? baseUrl
@@ -278,6 +291,7 @@ function buildOpenCodeJson({ baseUrl = "", apiKey = "", rows = [] }) {
   const mainModel = getOpenCodeModelKey(defaultRow) || "gpt-5.5";
   const explorerRow = safeRows.find((r) => r && r.slot === "explorer") || safeRows[1] || defaultRow;
   const explorerModel = getOpenCodeModelKey(explorerRow) || mainModel;
+  const personaPrompt = getOpenCodePersonaPrompt(personaPrompts);
 
   const modelsMap = {};
   for (const r of safeRows) {
@@ -312,13 +326,13 @@ function buildOpenCodeJson({ baseUrl = "", apiKey = "", rows = [] }) {
         description: "Primary coding assistant with a light anime/wibu personality",
         mode: "primary",
         model: `9router/${mainModel}`,
-        prompt: OPENCODE_WIBU_PROMPT,
+        prompt: personaPrompt,
       },
       explorer: {
         description: "Fast explorer subagent for codebase exploration",
         mode: "subagent",
         model: `9router/${explorerModel}`,
-        prompt: OPENCODE_WIBU_PROMPT,
+        prompt: personaPrompt,
       },
     },
   };
@@ -371,12 +385,15 @@ function buildOpenCodeSyncPs1() {
     `$BaseUrl = "__9ROUTER_BASE_URL__"`,
     `$ConfigDir = Join-Path $env:USERPROFILE ".config\\opencode"`,
     `$ConfigPath = Join-Path $ConfigDir "opencode.json"`,
+    `$AgentsPath = Join-Path $ConfigDir "AGENTS.md"`,
     `$CachePath = Join-Path $env:USERPROFILE ".cache\\opencode\\models.json"`,
     `try {`,
     `  $EncodedBaseUrl = [System.Uri]::EscapeDataString($BaseUrl)`,
     `  $Uri = "$DashboardUrl/api/v1/model-integration/opencode.json?baseUrl=$EncodedBaseUrl"`,
+    `  $AgentsUri = "$DashboardUrl/api/v1/model-integration/opencode-agents.md"`,
     `  [System.IO.Directory]::CreateDirectory($ConfigDir) | Out-Null`,
     `  Invoke-WebRequest -Uri $Uri -UseBasicParsing -TimeoutSec 20 -Headers @{ Accept = "application/json" } -OutFile $ConfigPath`,
+    `  Invoke-WebRequest -Uri $AgentsUri -UseBasicParsing -TimeoutSec 20 -Headers @{ Accept = "text/markdown" } -OutFile $AgentsPath`,
     `  if (Test-Path $CachePath) { Remove-Item -LiteralPath $CachePath -Force }`,
     `} catch {}`,
     "",
@@ -440,6 +457,7 @@ function buildBat(config) {
     ? buildCodexToml({ ...safeConfig, baseUrl: "__9ROUTER_BASE_URL__" })
     : buildGrokToml({ ...safeConfig, baseUrl: "__9ROUTER_BASE_URL__" });
   const opencodeJson = buildOpenCodeJson({ ...safeConfig, baseUrl: "__9ROUTER_BASE_URL__" });
+  const opencodeAgentsMd = buildOpenCodeAgentsMd(safeConfig.opencodePersonaPrompts || safeConfig.tools?.opencode?.personaPrompts || {});
   const codexMapJson = JSON.stringify(
     Object.fromEntries(rows.map((row) => [row?.slot || "", row?.model || ""])),
     null,
@@ -510,7 +528,7 @@ function buildBat(config) {
       "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*9router-opencode-sync.ps1*' } | ForEach-Object { $_.Terminate() | Out-Null }\" >nul 2>nul",
       "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='Stop'; Invoke-WebRequest -Uri '%CONFIG_URL%' -UseBasicParsing -Headers @{ Accept='application/json' } -OutFile '%CONFIG_PATH%'\"",
       "if errorlevel 1 goto opencode_fetch_failed",
-      ...writeBatchFileBlock("AGENTS_PATH", OPENCODE_WIBU_AGENTS_MD),
+      ...writeBatchFileBlock("AGENTS_PATH", opencodeAgentsMd),
       "if exist \"%CACHE_PATH%\" del /F /Q \"%CACHE_PATH%\"",
       ...writeBatchFileBlock("SYNC_PATH", buildOpenCodeSyncPs1()
         .replaceAll("__9ROUTER_BASE_URL__", "%BASE_URL%")
@@ -591,6 +609,7 @@ export default function ModelIntegrationClient() {
   const [newGrokModel, setNewGrokModel] = useState("");
   const [newOpenCodeName, setNewOpenCodeName] = useState("");
   const [newOpenCodeModel, setNewOpenCodeModel] = useState("");
+  const [opencodePersonaPrompts, setOpenCodePersonaPrompts] = useState({});
 
   useEffect(() => {
     let mounted = true;
@@ -615,6 +634,7 @@ export default function ModelIntegrationClient() {
         setNewGrokModel(normalized.newGrokModel);
         setNewOpenCodeName(normalized.newOpenCodeName);
         setNewOpenCodeModel(normalized.newOpenCodeModel);
+        setOpenCodePersonaPrompts(normalized.opencodePersonaPrompts);
 
         if (localConfig && (!data?.config || !data?.config?.tools)) {
           fetch("/api/model-integration", {
@@ -633,6 +653,7 @@ export default function ModelIntegrationClient() {
         setNewGrokModel(normalized.newGrokModel);
         setNewOpenCodeName(normalized.newOpenCodeName);
         setNewOpenCodeModel(normalized.newOpenCodeModel);
+        setOpenCodePersonaPrompts(normalized.opencodePersonaPrompts);
       }
     };
     loadSavedConfig();
@@ -658,7 +679,15 @@ export default function ModelIntegrationClient() {
     return () => { mounted = false; };
   }, []);
 
-  const script = useMemo(() => buildBat(config), [config]);
+  const script = useMemo(() => buildBat({ ...config, opencodePersonaPrompts }), [config, opencodePersonaPrompts]);
+
+  const updateOpenCodePersonaPrompt = (day, prompt) => {
+    setSaved(false);
+    setOpenCodePersonaPrompts((current) => ({
+      ...(current || {}),
+      [day]: prompt,
+    }));
+  };
 
   const updateTool = (toolId) => {
     setSaved(false);
@@ -766,12 +795,13 @@ export default function ModelIntegrationClient() {
       tools: {
         codex: { rows: nextToolRows.codex },
         grok: { rows: nextToolRows.grok, newGrokName, newGrokModel },
-        opencode: { rows: nextToolRows.opencode, newOpenCodeName, newOpenCodeModel },
+        opencode: { rows: nextToolRows.opencode, newOpenCodeName, newOpenCodeModel, personaPrompts: opencodePersonaPrompts },
       },
       newGrokName,
       newGrokModel,
       newOpenCodeName,
       newOpenCodeModel,
+      opencodePersonaPrompts,
     };
     setSaving(true);
     setSaveError("");
@@ -936,26 +966,51 @@ export default function ModelIntegrationClient() {
           )}
 
           {config.tool === "opencode" && (
-            <div className="mt-5 rounded-lg border border-dashed border-border p-3">
-              <div className="grid min-w-0 gap-2 xl:grid-cols-[220px_minmax(0,1fr)_auto] xl:items-end">
-                <Input
-                  label="Nama model OpenCode"
-                  placeholder="contoh: Claude 3.7 Sonnet"
-                  value={newOpenCodeName}
-                  onChange={(event) => { setSaved(false); setNewOpenCodeName(event.target.value); }}
-                />
-                <Input
-                  label="Model 9Router"
-                  placeholder="provider/model-id"
-                  value={newOpenCodeModel}
-                  onChange={(event) => { setSaved(false); setNewOpenCodeModel(event.target.value); }}
-                />
-                <div className="flex gap-2">
-                  <Button className="whitespace-nowrap" variant="secondary" onClick={() => setSelectingSlot("__new_opencode__")}>Select Model</Button>
-                  <Button icon="add" onClick={addOpenCodeModel} disabled={!newOpenCodeName.trim() || !newOpenCodeModel}>Add</Button>
+            <>
+              <div className="mt-5 rounded-lg border border-dashed border-border p-3">
+                <div className="grid min-w-0 gap-2 xl:grid-cols-[220px_minmax(0,1fr)_auto] xl:items-end">
+                  <Input
+                    label="Nama model OpenCode"
+                    placeholder="contoh: Claude 3.7 Sonnet"
+                    value={newOpenCodeName}
+                    onChange={(event) => { setSaved(false); setNewOpenCodeName(event.target.value); }}
+                  />
+                  <Input
+                    label="Model 9Router"
+                    placeholder="provider/model-id"
+                    value={newOpenCodeModel}
+                    onChange={(event) => { setSaved(false); setNewOpenCodeModel(event.target.value); }}
+                  />
+                  <div className="flex gap-2">
+                    <Button className="whitespace-nowrap" variant="secondary" onClick={() => setSelectingSlot("__new_opencode__")}>Select Model</Button>
+                    <Button icon="add" onClick={addOpenCodeModel} disabled={!newOpenCodeName.trim() || !newOpenCodeModel}>Add</Button>
+                  </div>
                 </div>
               </div>
-            </div>
+
+              <div className="mt-5 rounded-lg border border-border bg-surface-2 p-3">
+                <div className="mb-3">
+                  <h2 className="text-sm font-semibold text-text-main">Prompt karakter OpenCode per hari</h2>
+                  <p className="text-xs text-text-muted">
+                    Isi prompt manual untuk Senin sampai Minggu. Kosongkan hari tertentu untuk memakai default Miku-chan.
+                  </p>
+                </div>
+                <div className="grid gap-3 lg:grid-cols-2">
+                  {OPENCODE_DAYS.map((day) => (
+                    <label key={day.key} className="flex min-w-0 flex-col gap-1">
+                      <span className="text-xs font-semibold uppercase text-text-muted">{day.label}</span>
+                      <textarea
+                        value={opencodePersonaPrompts?.[day.key] || ""}
+                        onChange={(event) => updateOpenCodePersonaPrompt(day.key, event.target.value)}
+                        placeholder={`Prompt ${day.label}; kosong = default Miku-chan`}
+                        rows={5}
+                        className="w-full resize-y rounded-[10px] border border-border bg-surface px-3 py-2 text-sm text-text-main focus:border-brand-500/40 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </>
           )}
 
           <div className="mt-5 flex flex-wrap gap-2">
