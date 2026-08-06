@@ -1,4 +1,11 @@
 import { ANTIGRAVITY_CONFIG, getOAuthClientMetadata } from "../constants/oauth.js";
+import { createHash } from "crypto";
+
+function shortHash(value) {
+  return value
+    ? createHash("sha256").update(String(value)).digest("hex").slice(0, 12)
+    : null;
+}
 
 const antigravity = {
   config: ANTIGRAVITY_CONFIG,
@@ -15,7 +22,7 @@ const antigravity = {
     });
     return `${config.authorizeUrl}?${params.toString()}`;
   },
-  exchangeToken: async (config, code, redirectUri) => {
+  exchangeToken: async (config, code, redirectUri, codeVerifier, state) => {
     const response = await fetch(config.tokenUrl, {
       method: "POST",
       headers: {
@@ -33,6 +40,14 @@ const antigravity = {
 
     if (!response.ok) {
       const error = await response.text();
+      console.log("[ANTIGRAVITY_OAUTH_EXCHANGE_FAILED]", {
+        status: response.status,
+        redirectUri,
+        codeHash: shortHash(code),
+        stateHash: shortHash(state),
+        hasClientId: Boolean(config.clientId),
+        hasClientSecret: Boolean(config.clientSecret),
+      });
       throw new Error(`Token exchange failed: ${error}`);
     }
 

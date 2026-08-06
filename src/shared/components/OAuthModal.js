@@ -9,6 +9,14 @@ import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 // Browser OAuth: popup → auto callback → auto exchange → poll-status.
 const PROXY_OAUTH_PROVIDERS = new Set(["trae", "windsurf", "zed"]);
 
+// Google OAuth public/installed-app style clients accept loopback callbacks.
+// When the dashboard is served remotely (for example over HTTPS), deriving the
+// callback from the dashboard port creates odd URLs like http://localhost:443.
+// Use the app's documented loopback fallback instead so the auth and exchange
+// redirect_uri stay stable for manual remote login.
+const LOOPBACK_MANUAL_OAUTH_PROVIDERS = new Set(["antigravity", "gemini-cli"]);
+const DEFAULT_LOOPBACK_CALLBACK = "http://localhost:8080/callback";
+
 // Providers offering a paste-token fallback (import-token flow).
 // UX warns if the IDE (which issues the token) is not installed.
 const PASTE_TOKEN_PROVIDERS = {
@@ -69,8 +77,17 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
 
   // Define all useCallback hooks BEFORE the useEffects that reference them
 
+  const getCallbackRedirectUri = useCallback((urlValue) => {
+    try {
+      const url = new URL(urlValue);
+      return `${url.protocol}//${url.host}${url.pathname}`;
+    } catch {
+      return null;
+    }
+  }, []);
+
   // Exchange tokens
-  const exchangeTokens = useCallback(async (code, state) => {
+  const exchangeTokens = useCallback(async (code, state, redirectUriOverride) => {
     if (!authData) return;
     try {
       const res = await fetch(`/api/oauth/${provider}/exchange`, {
@@ -78,7 +95,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           code,
-          redirectUri: authData.redirectUri,
+          redirectUri: redirectUriOverride || authData.redirectUri,
           codeVerifier: authData.codeVerifier,
           state,
           ...(oauthMeta ? { meta: oauthMeta } : {}),
@@ -215,6 +232,8 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
     if (!provider) return;
     try {
       setError(null);
+      setCallbackUrl("");
+      callbackProcessedRef.current = false;
 
       // Trae/Windsurf: proxy OAuth (browser mode) — handled by dedicated flow.
       // Paste-token mode is handled by handleManualSubmit (no /authorize call).
@@ -299,6 +318,8 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         redirectUri = "http://localhost:1455/auth/callback";
       } else if (provider === "xai") {
         redirectUri = "http://127.0.0.1:56121/callback";
+      } else if (!isLocalhost && LOOPBACK_MANUAL_OAUTH_PROVIDERS.has(provider)) {
+        redirectUri = DEFAULT_LOOPBACK_CALLBACK;
       } else {
         redirectUri = `http://localhost:${appPort}/callback`;
       }
@@ -502,6 +523,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
       if (callbackProcessedRef.current) return; // Already processed
 
       const { code, token, state, error: callbackError, errorDescription } = data;
+      const callbackRedirectUri = data?.fullUrl ? getCallbackRedirectUri(data.fullUrl) : null;
 
       if (callbackError) {
         callbackProcessedRef.current = true;
@@ -512,7 +534,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
 
       if (token || code) {
         callbackProcessedRef.current = true;
-        await exchangeTokens(token || code, state);
+        await exchangeTokens(token || code, state, callbackRedirectUri);
       }
     };
 
@@ -571,7 +593,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
       window.removeEventListener("storage", handleStorage);
       if (channel) channel.close();
     };
-  }, [authData, exchangeTokens]);
+  }, [authData, exchangeTokens, getCallbackRedirectUri]);
 
   // Handle manual URL input
   const handleManualSubmit = async () => {
@@ -627,6 +649,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
       }
 
       const url = new URL(input);
+      const callbackRedirectUri = getCallbackRedirectUri(input);
       const code = url.searchParams.get("code");
       const token = url.searchParams.get("token");
       const state = url.searchParams.get("state");
@@ -646,7 +669,11 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         );
       }
 
-      await exchangeTokens(token || code, state);
+      if (state && authData?.state && state !== authData.state) {
+        throw new Error("Callback state does not match this login attempt. Start a new login and paste the latest callback URL.");
+      }
+
+      await exchangeTokens(token || code, state, callbackRedirectUri);
     } catch (err) {
       setError(err.message);
       setStep("error");
@@ -678,6 +705,8 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
     ? "http://127.0.0.1:56121/callback?code=... or copied code"
     : isKimchiProvider
       ? `${placeholderUrl.replace("code=...", "token=...")} or copied token`
+      : LOOPBACK_MANUAL_OAUTH_PROVIDERS.has(provider) && !isLocalhost
+        ? `${DEFAULT_LOOPBACK_CALLBACK}?code=...&state=...`
       : placeholderUrl;
 
   return (
