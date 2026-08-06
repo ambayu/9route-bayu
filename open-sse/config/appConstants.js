@@ -1,6 +1,6 @@
 import { platform, arch, hostname } from "os";
 import { PROVIDERS, PROVIDER_OAUTH } from "./providers.js";
-import { ANTIGRAVITY_IDE_USER_AGENT } from "../providers/shared.js";
+import { getAntigravityUserAgent } from "../providers/shared.js";
 import { createRequire } from "module";
 
 // === Gemini CLI === derive từ registry gemini-cli.transport
@@ -61,7 +61,7 @@ export function getPlatformEnum() {
 }
 
 export function getPlatformUserAgent() {
-  return ANTIGRAVITY_IDE_USER_AGENT;
+  return getAntigravityUserAgent();
 }
 
 export const CLIENT_METADATA = {
@@ -129,9 +129,9 @@ export const AG_DEFAULT_TOOLS = new Set([
   "write_to_file"
 ]);
 
-// Antigravity chat/stream headers
+// Antigravity chat/stream headers — must match real IDE fingerprint.
 export const ANTIGRAVITY_HEADERS = {
-  "User-Agent": ANTIGRAVITY_IDE_USER_AGENT
+  "User-Agent": getAntigravityUserAgent()
 };
 
 // Cloud Code Assist API endpoints differ by client ecosystem.
@@ -151,9 +151,7 @@ export const CLOUD_CODE_API = {
 
 export const LOAD_CODE_ASSIST_HEADERS = {
   "Content-Type": "application/json",
-  "User-Agent": "google-api-nodejs-client/9.15.1",
-  "X-Goog-Api-Client": "google-cloud-sdk vscode_cloudshelleditor/0.1",
-  "Client-Metadata": JSON.stringify({ ideType: IDE_TYPE.ANTIGRAVITY, platform: getPlatformEnum(), pluginType: PLUGIN_TYPE.GEMINI }),
+  "User-Agent": getAntigravityUserAgent(),
 };
 
 export const LOAD_CODE_ASSIST_METADATA = {
