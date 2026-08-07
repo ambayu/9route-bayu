@@ -59,10 +59,18 @@ const antigravity = {
       "Authorization": `Bearer ${tokens.access_token}`,
       "Content-Type": "application/json",
       "User-Agent": ANTIGRAVITY_CONFIG.loadCodeAssistUserAgent,
-      "X-Goog-Api-Client": ANTIGRAVITY_CONFIG.loadCodeAssistApiClient,
-      "Client-Metadata": ANTIGRAVITY_CONFIG.loadCodeAssistClientMetadata,
       "x-request-source": "local",
     };
+    // These two fingerprint headers are optional and may be absent from the
+    // registry config (removed in the IDE 2.1.1 fingerprint alignment).
+    // Sending an undefined header value makes undici throw
+    // ERR_HTTP_INVALID_HEADER_VALUE — guard before attaching.
+    if (ANTIGRAVITY_CONFIG.loadCodeAssistApiClient) {
+      loadHeaders["X-Goog-Api-Client"] = ANTIGRAVITY_CONFIG.loadCodeAssistApiClient;
+    }
+    if (ANTIGRAVITY_CONFIG.loadCodeAssistClientMetadata) {
+      loadHeaders["Client-Metadata"] = ANTIGRAVITY_CONFIG.loadCodeAssistClientMetadata;
+    }
     const metadata = getOAuthClientMetadata();
 
     // Fetch user info
