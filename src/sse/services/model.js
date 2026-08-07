@@ -33,6 +33,20 @@ export async function resolveModelAlias(alias) {
 }
 
 /**
+ * Match a custom provider-node prefix (e.g. "oc-prod") to its node id so
+ * credential lookup finds the connection. Returns null when no node matches.
+ */
+async function matchCustomNodeProvider(providerOrPrefix) {
+  if (!providerOrPrefix) return null;
+  for (const type of ["openai-compatible", "anthropic-compatible", "custom-embedding"]) {
+    const nodes = await getProviderNodes({ type });
+    const matched = nodes.find((node) => node.prefix === providerOrPrefix);
+    if (matched) return matched.id;
+  }
+  return null;
+}
+
+/**
  * Get full model info (parse or resolve)
  */
 export async function getModelInfo(modelStr) {
@@ -42,22 +56,9 @@ export async function getModelInfo(modelStr) {
     // Provider-node prefixes are user-defined. They must not override built-in
     // provider ids/aliases such as `cf`, `cloudflare-ai`, `openai`, or `hf`.
     if (!RESERVED_PROVIDER_PREFIXES.has(parsed.providerAlias)) {
-      const openaiNodes = await getProviderNodes({ type: "openai-compatible" });
-      const matchedOpenAI = openaiNodes.find((node) => node.prefix === parsed.providerAlias);
-      if (matchedOpenAI) {
-        return { provider: matchedOpenAI.id, model: parsed.model };
-      }
-
-      const anthropicNodes = await getProviderNodes({ type: "anthropic-compatible" });
-      const matchedAnthropic = anthropicNodes.find((node) => node.prefix === parsed.providerAlias);
-      if (matchedAnthropic) {
-        return { provider: matchedAnthropic.id, model: parsed.model };
-      }
-
-      const embeddingNodes = await getProviderNodes({ type: "custom-embedding" });
-      const matchedEmbedding = embeddingNodes.find((node) => node.prefix === parsed.providerAlias);
-      if (matchedEmbedding) {
-        return { provider: matchedEmbedding.id, model: parsed.model };
+      const nodeProvider = await matchCustomNodeProvider(parsed.providerAlias);
+      if (nodeProvider) {
+        return { provider: nodeProvider, model: parsed.model };
       }
     }
     return {
@@ -75,7 +76,17 @@ export async function getModelInfo(modelStr) {
     return { provider: null, model: parsed.model };
   }
 
-  return getModelInfoCore(modelStr, getModelAliases);
+  const resolved = await getModelInfoCore(modelStr, getModelAliases);
+  // A model alias may resolve to a custom provider-node prefix (e.g.
+  // "sekai-gpt" → "oc-prod/gpt/gpt-5.5"). Map the prefix to its node id just
+  // like the direct-prefix path above, so credential lookup finds the connection.
+  if (resolved?.provider && !RESERVED_PROVIDER_PREFIXES.has(resolved.provider)) {
+    const nodeProvider = await matchCustomNodeProvider(resolved.provider);
+    if (nodeProvider) {
+      return { provider: nodeProvider, model: resolved.model };
+    }
+  }
+  return resolved;
 }
 
 /**
