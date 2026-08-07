@@ -4,18 +4,11 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import PropTypes from "prop-types";
 import { Modal, Button, Input } from "@/shared/components";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
+import { DEFAULT_LOOPBACK_CALLBACK, LOOPBACK_MANUAL_OAUTH_PROVIDERS } from "@/shared/constants";
 
 // Providers using the dynamic-port local callback proxy.
 // Browser OAuth: popup → auto callback → auto exchange → poll-status.
 const PROXY_OAUTH_PROVIDERS = new Set(["trae", "windsurf", "zed"]);
-
-// Google OAuth public/installed-app style clients accept loopback callbacks.
-// When the dashboard is served remotely (for example over HTTPS), deriving the
-// callback from the dashboard port creates odd URLs like http://localhost:443.
-// Use the app's documented loopback fallback instead so the auth and exchange
-// redirect_uri stay stable for manual remote login.
-const LOOPBACK_MANUAL_OAUTH_PROVIDERS = new Set(["antigravity", "gemini-cli"]);
-const DEFAULT_LOOPBACK_CALLBACK = "http://localhost:8080/callback";
 
 // Providers offering a paste-token fallback (import-token flow).
 // UX warns if the IDE (which issues the token) is not installed.

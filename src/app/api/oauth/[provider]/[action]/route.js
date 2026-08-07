@@ -36,6 +36,7 @@ import {
 } from "@/lib/oauth/utils/server";
 import { detectIdeInstalled } from "@/lib/oauth/utils/ideDetect";
 import { ZED_HOSTED_CONFIG } from "@/lib/oauth/constants/oauth";
+import { DEFAULT_LOOPBACK_CALLBACK } from "@/shared/constants";
 
 async function completeXaiManualCode(code, state) {
   const session = state ? getXaiSessionStatus(state) : null;
@@ -89,7 +90,7 @@ export async function GET(request, { params }) {
     const { searchParams } = new URL(request.url);
 
     if (action === "authorize") {
-      const redirectUri = searchParams.get("redirect_uri") || "http://localhost:8080/callback";
+      const redirectUri = searchParams.get("redirect_uri") || DEFAULT_LOOPBACK_CALLBACK;
       // Collect provider-specific meta params (e.g. gitlab passes baseUrl, clientId, clientSecret)
       const reservedParams = new Set(["redirect_uri"]);
       const meta = {};
