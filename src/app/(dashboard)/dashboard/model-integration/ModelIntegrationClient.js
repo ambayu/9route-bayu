@@ -343,9 +343,11 @@ function buildOpenCodeJson({ baseUrl = "", apiKey = "", rows = [], personaPrompt
 function getOpenCodeModelKey(row) {
   const model = row?.model?.trim();
   if (!model) return "";
+  // Model ids without a provider prefix route directly (e.g. "gpt-5.5" via
+  // aliases) — slot keys like "default"/"explorer" must not leak into the key.
+  if (!model.includes("/")) return model;
   const slotKey = String(row?.slot || "").trim();
   if (slotKey) return slotKey;
-  if (!model.includes("/")) return model;
   const labelKey = String(row?.label || "")
     .trim()
     .toLowerCase()
@@ -474,12 +476,12 @@ function buildBat(config) {
       "set \"MAP_PATH=%CONFIG_DIR%\\9router-model-map.json\"",
       "if not exist \"%CONFIG_DIR%\" mkdir \"%CONFIG_DIR%\"",
       "echo Pilih endpoint Codex:",
-      "echo 1. 9Router local       http://127.0.0.1:20128/v1",
+      "echo 1. 9Router local       http://127.0.0.1:20127/v1",
       "echo 2. 9Router cloud       https://route9.nurset-studio.web.id/v1",
       "echo 3. Config bawaan Codex",
       "set /p CHOICE=Pilihan (1/2/3): ",
       "if \"%CHOICE%\"==\"3\" goto codex_default",
-      "if \"%CHOICE%\"==\"1\" (set \"BASE_URL=http://127.0.0.1:20128/v1\") else (set \"BASE_URL=https://route9.nurset-studio.web.id/v1\")",
+      "if \"%CHOICE%\"==\"1\" (set \"BASE_URL=http://127.0.0.1:20127/v1\") else (set \"BASE_URL=https://route9.nurset-studio.web.id/v1\")",
       ...writeBatchFileBlock("CONFIG_PATH", toml.replaceAll("__9ROUTER_BASE_URL__", "%BASE_URL%")),
       ...writeBatchFileBlock("AUTH_PATH", authJson),
       ...writeBatchFileBlock("MAP_PATH", codexMapJson),
@@ -510,15 +512,15 @@ function buildBat(config) {
       "if not exist \"%CONFIG_DIR%\" mkdir \"%CONFIG_DIR%\"",
       "if not exist \"%LAUNCHER_DIR%\" mkdir \"%LAUNCHER_DIR%\"",
       "echo Pilih endpoint OpenCode:",
-      "echo 1. 9Router local       http://127.0.0.1:20128/v1",
+      "echo 1. 9Router local       http://127.0.0.1:20127/v1",
       "echo 2. 9Router cloud       https://route9.nurset-studio.web.id/v1",
       "echo 3. Config bawaan OpenCode",
       "set /p CHOICE=Pilihan (1/2/3): ",
       "if \"%CHOICE%\"==\"3\" goto opencode_default",
       "if \"%CHOICE%\"==\"1\" (",
-      "  set \"BASE_URL=http://127.0.0.1:20128/v1\"",
-      "  set \"DASHBOARD_URL=http://127.0.0.1:20128\"",
-      "  set \"CONFIG_URL=http://127.0.0.1:20128/api/v1/model-integration/opencode.json?baseUrl=http%%3A%%2F%%2F127.0.0.1%%3A20128%%2Fv1\"",
+      "  set \"BASE_URL=http://127.0.0.1:20127/v1\"",
+      "  set \"DASHBOARD_URL=http://127.0.0.1:20127\"",
+      "  set \"CONFIG_URL=http://127.0.0.1:20127/api/v1/model-integration/opencode.json?baseUrl=http%%3A%%2F%%2F127.0.0.1%%3A20127%%2Fv1\"",
       ") else (",
       "  set \"BASE_URL=https://route9.nurset-studio.web.id/v1\"",
       "  set \"DASHBOARD_URL=https://route9.nurset-studio.web.id\"",
@@ -565,14 +567,14 @@ function buildBat(config) {
     "set \"STARTUP_PATH=%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\9router-grok-model-sync.cmd\"",
     "if not exist \"%CONFIG_DIR%\" mkdir \"%CONFIG_DIR%\"",
     "echo Pilih endpoint Grok Build:",
-    "echo 1. 9Router local       http://127.0.0.1:20128/v1",
+    "echo 1. 9Router local       http://127.0.0.1:20127/v1",
     "echo 2. 9Router cloud       https://route9.nurset-studio.web.id/v1",
     "echo 3. Config bawaan Grok  grok-build",
     "set /p CHOICE=Pilihan (1/2/3): ",
     "if \"%CHOICE%\"==\"3\" goto grok_default",
     "if \"%CHOICE%\"==\"1\" (",
-    "  set \"BASE_URL=http://127.0.0.1:20128/v1\"",
-    "  set \"DASHBOARD_URL=http://127.0.0.1:20128\"",
+    "  set \"BASE_URL=http://127.0.0.1:20127/v1\"",
+    "  set \"DASHBOARD_URL=http://127.0.0.1:20127\"",
     ") else (",
     "  set \"BASE_URL=https://route9.nurset-studio.web.id/v1\"",
     "  set \"DASHBOARD_URL=https://route9.nurset-studio.web.id\"",

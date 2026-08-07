@@ -13,9 +13,11 @@ function getOpenCodePersonaPrompts(config) {
 function getOpenCodeModelKey(row) {
   const model = row?.model?.trim();
   if (!model) return "";
+  // Model ids without a provider prefix route directly (e.g. "gpt-5.5" via
+  // aliases) — slot keys like "default"/"explorer" must not leak into the key.
+  if (!model.includes("/")) return model;
   const slotKey = String(row?.slot || "").trim();
   if (slotKey) return slotKey;
-  if (!model.includes("/")) return model;
   const labelKey = String(row?.label || "")
     .trim()
     .toLowerCase()
