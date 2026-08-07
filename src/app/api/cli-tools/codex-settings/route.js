@@ -70,7 +70,7 @@ const checkCodexInstalled = async () => {
       try {
         await fs.access(configPath);
       } catch {
-        await fs.writeFile(configPath, 'model_provider = "9router"\nmodel = "gpt-5.6-sol"\n\n[model_providers.9router]\nbase_url = "http://127.0.0.1:20128/v1"\nwire_version = "v1"\n');
+        await fs.writeFile(configPath, 'model_provider = "9router"\nmodel = "gpt-5.6-sol"\n\n[model_providers.9router]\nbase_url = "http://127.0.0.1:20127/v1"\nwire_version = "v1"\n');
       }
       return true;
     } catch {
